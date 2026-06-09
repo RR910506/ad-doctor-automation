@@ -1,0 +1,4 @@
+source_name,website_url,rss_url,category,country,credibility_tier,active_status
+Ad News Daily,https://example.com/ad-news,https://example.com/ad-news/rss,Advertising,US,3,active
+Campaign Watch,https://example.com/campaign-watch,https://example.com/campaign-watch/rss,Campaigns,IN,2,active
+Marketing Desk,https://example.com/marketing-desk,,Marketing,UK,1,inactive
