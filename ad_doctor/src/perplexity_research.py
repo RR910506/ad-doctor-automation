@@ -75,7 +75,14 @@ def research_topic_with_perplexity(
     content = extract_response_content(response_json)
     parsed = parse_json_object(content)
     citations = extract_citations(response_json)
-    return normalize_research_result(topic, source_articles, parsed, content, citations)
+    return normalize_research_result(
+        topic,
+        source_articles,
+        parsed,
+        content,
+        citations,
+        response_json.get("usage"),
+    )
 
 
 def prepare_source_articles(source_articles: list[dict[str, object]]) -> list[dict[str, object]]:
@@ -183,6 +190,7 @@ def normalize_research_result(
     parsed: dict[str, Any],
     content: str,
     citations: list[str],
+    usage: Any = None,
 ) -> dict[str, Any]:
     result = {key: normalize_value(parsed.get(key)) for key in RESEARCH_KEYS}
     if not result["summary"]:
@@ -199,6 +207,8 @@ def normalize_research_result(
     result["status"] = "completed"
     result["topic"] = topic
     result["model"] = PERPLEXITY_MODEL
+    if isinstance(usage, dict):
+        result["usage"] = usage
     return result
 
 

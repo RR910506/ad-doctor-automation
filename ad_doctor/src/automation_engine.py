@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import closing
 from dataclasses import dataclass
+import json
 from pathlib import Path
 import platform
 import re
@@ -24,6 +25,7 @@ class AutomationSettings:
     notify_on_failure: bool
     fetch_source_time_budget_seconds: int
     updated_at: str | None = None
+    schedule_times: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -41,6 +43,7 @@ def get_automation_settings(database_path=DATABASE_PATH) -> AutomationSettings:
             SELECT
                 enabled,
                 schedule_time,
+                schedule_times,
                 timezone,
                 task_name,
                 notify_on_success,
@@ -60,7 +63,9 @@ def get_automation_settings(database_path=DATABASE_PATH) -> AutomationSettings:
             notify_on_success=True,
             notify_on_failure=True,
             fetch_source_time_budget_seconds=180,
+            schedule_times=("09:00",),
         )
+    schedule_times = parse_schedule_times(row["schedule_times"] or row["schedule_time"])
     return AutomationSettings(
         enabled=bool(row["enabled"]),
         schedule_time=str(row["schedule_time"]),
@@ -70,6 +75,7 @@ def get_automation_settings(database_path=DATABASE_PATH) -> AutomationSettings:
         notify_on_failure=bool(row["notify_on_failure"]),
         fetch_source_time_budget_seconds=int(row["fetch_source_time_budget_seconds"]),
         updated_at=row["updated_at"],
+        schedule_times=schedule_times,
     )
 
 
@@ -77,6 +83,7 @@ def save_automation_settings(
     *,
     enabled: bool,
     schedule_time: str,
+    schedule_times: list[str] | tuple[str, ...] | str | None = None,
     timezone: str = "Asia/Kolkata",
     task_name: str = TASK_NAME,
     notify_on_success: bool = True,
@@ -84,7 +91,8 @@ def save_automation_settings(
     fetch_source_time_budget_seconds: int = 180,
     database_path=DATABASE_PATH,
 ) -> AutomationSettings:
-    validate_schedule_time(schedule_time)
+    normalized_schedule_times = parse_schedule_times(schedule_times or schedule_time)
+    schedule_time = normalized_schedule_times[0]
     initialize_database(database_path=database_path)
     with closing(get_connection(database_path)) as connection:
         connection.execute(
@@ -93,6 +101,7 @@ def save_automation_settings(
                 id,
                 enabled,
                 schedule_time,
+                schedule_times,
                 timezone,
                 task_name,
                 notify_on_success,
@@ -100,10 +109,11 @@ def save_automation_settings(
                 fetch_source_time_budget_seconds,
                 updated_at
             )
-            VALUES (1, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(id) DO UPDATE SET
                 enabled = excluded.enabled,
                 schedule_time = excluded.schedule_time,
+                schedule_times = excluded.schedule_times,
                 timezone = excluded.timezone,
                 task_name = excluded.task_name,
                 notify_on_success = excluded.notify_on_success,
@@ -114,6 +124,7 @@ def save_automation_settings(
             (
                 1 if enabled else 0,
                 schedule_time,
+                json.dumps(list(normalized_schedule_times)),
                 timezone,
                 task_name,
                 1 if notify_on_success else 0,
@@ -142,63 +153,66 @@ def install_or_update_daily_task(
             success=False,
             message=f"Missing scheduler script: {script_path}",
         )
+    schedule_times = settings.schedule_times or (settings.schedule_time,)
     task_command = f'cmd.exe /c ""{script_path}""'
-    create_command = [
-        "schtasks.exe",
-        "/Create",
-        "/F",
-        "/SC",
-        "DAILY",
-        "/ST",
-        settings.schedule_time,
-        "/TN",
-        settings.task_name,
-        "/TR",
-        task_command,
-    ]
     try:
-        create_result = subprocess.run(
-            create_command,
-            capture_output=True,
-            check=False,
-            text=True,
-        )
-        if create_result.returncode != 0:
-            return SchedulerUpdateResult(
-                supported=True,
-                success=False,
-                message=(create_result.stderr or create_result.stdout or "Unable to create scheduled task.").strip(),
+        for index, schedule_time in enumerate(schedule_times):
+            task_name = build_scheduled_task_name(settings.task_name, schedule_time, index, len(schedule_times))
+            create_command = [
+                "schtasks.exe",
+                "/Create",
+                "/F",
+                "/SC",
+                "DAILY",
+                "/ST",
+                schedule_time,
+                "/TN",
+                task_name,
+                "/TR",
+                task_command,
+            ]
+            create_result = subprocess.run(
+                create_command,
+                capture_output=True,
+                check=False,
+                text=True,
             )
-        change_state = "ENABLE" if settings.enabled else "DISABLE"
-        state_result = subprocess.run(
-            ["schtasks.exe", "/Change", "/TN", settings.task_name, f"/{change_state}"],
-            capture_output=True,
-            check=False,
-            text=True,
-        )
-        if state_result.returncode != 0:
-            return SchedulerUpdateResult(
-                supported=True,
-                success=False,
-                message=(state_result.stderr or state_result.stdout or "Unable to update scheduled task state.").strip(),
+            if create_result.returncode != 0:
+                return SchedulerUpdateResult(
+                    supported=True,
+                    success=False,
+                    message=(create_result.stderr or create_result.stdout or "Unable to create scheduled task.").strip(),
+                )
+            change_state = "ENABLE" if settings.enabled else "DISABLE"
+            state_result = subprocess.run(
+                ["schtasks.exe", "/Change", "/TN", task_name, f"/{change_state}"],
+                capture_output=True,
+                check=False,
+                text=True,
             )
-        settings_result = apply_windows_task_settings(settings.task_name)
-        if settings_result.returncode != 0:
-            return SchedulerUpdateResult(
-                supported=True,
-                success=False,
-                message=(
-                    settings_result.stderr
-                    or settings_result.stdout
-                    or "Unable to update scheduled task settings."
-                ).strip(),
-            )
+            if state_result.returncode != 0:
+                return SchedulerUpdateResult(
+                    supported=True,
+                    success=False,
+                    message=(state_result.stderr or state_result.stdout or "Unable to update scheduled task state.").strip(),
+                )
+            settings_result = apply_windows_task_settings(task_name)
+            if settings_result.returncode != 0:
+                return SchedulerUpdateResult(
+                    supported=True,
+                    success=False,
+                    message=(
+                        settings_result.stderr
+                        or settings_result.stdout
+                        or "Unable to update scheduled task settings."
+                    ).strip(),
+                )
     except OSError as exc:
         return SchedulerUpdateResult(supported=True, success=False, message=str(exc))
     return SchedulerUpdateResult(
         supported=True,
         success=True,
-        message=f"Scheduled task {settings.task_name} set to {settings.schedule_time}.",
+        message=f"Scheduled {len(schedule_times)} daily run time(s): {', '.join(schedule_times)}.",
     )
 
 
@@ -208,6 +222,43 @@ def validate_schedule_time(schedule_time: str) -> None:
     hour, minute = (int(part) for part in schedule_time.split(":"))
     if not (0 <= hour <= 23 and 0 <= minute <= 59):
         raise ValueError("Schedule time must be a valid 24-hour time.")
+
+
+def parse_schedule_times(value: list[str] | tuple[str, ...] | str) -> tuple[str, ...]:
+    if isinstance(value, str):
+        raw_values = value.strip()
+        if raw_values.startswith("["):
+            try:
+                decoded = json.loads(raw_values)
+                parts = [str(item).strip() for item in decoded]
+            except (TypeError, ValueError):
+                parts = re.split(r"[,;\n]+", raw_values)
+        else:
+            parts = re.split(r"[,;\n]+", raw_values)
+    else:
+        parts = [str(item).strip() for item in value]
+    schedule_times = []
+    for part in parts:
+        part = str(part).strip()
+        if not part:
+            continue
+        validate_schedule_time(part)
+        if part not in schedule_times:
+            schedule_times.append(part)
+    if not schedule_times:
+        raise ValueError("Add at least one daily run time.")
+    return tuple(schedule_times)
+
+
+def build_scheduled_task_name(
+    base_task_name: str,
+    schedule_time: str,
+    index: int,
+    total: int,
+) -> str:
+    if total == 1:
+        return base_task_name
+    return f"{base_task_name}_{schedule_time.replace(':', '')}"
 
 
 def apply_windows_task_settings(task_name: str) -> subprocess.CompletedProcess[str]:

@@ -141,6 +141,7 @@ CREATE TABLE IF NOT EXISTS automation_settings (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     enabled INTEGER NOT NULL DEFAULT 1,
     schedule_time TEXT NOT NULL DEFAULT '09:00',
+    schedule_times TEXT NOT NULL DEFAULT '["09:00"]',
     timezone TEXT NOT NULL DEFAULT 'Asia/Kolkata',
     task_name TEXT NOT NULL DEFAULT 'AdDoctorDailyScrape',
     notify_on_success INTEGER NOT NULL DEFAULT 1,
@@ -171,6 +172,22 @@ CREATE TABLE IF NOT EXISTS notification_events (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS automation_run_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    schedule_key TEXT NOT NULL,
+    scheduled_date TEXT NOT NULL,
+    scheduled_time TEXT NOT NULL,
+    timezone TEXT NOT NULL,
+    run_id TEXT,
+    status TEXT NOT NULL,
+    error_message TEXT,
+    started_at TEXT,
+    finished_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (schedule_key)
+);
+
 CREATE INDEX IF NOT EXISTS idx_sources_active_status ON sources (active_status);
 CREATE INDEX IF NOT EXISTS idx_articles_source_id ON articles (source_id);
 CREATE INDEX IF NOT EXISTS idx_topic_sources_topic_id ON topic_sources (topic_id);
@@ -178,3 +195,5 @@ CREATE INDEX IF NOT EXISTS idx_topic_sources_source_id ON topic_sources (source_
 CREATE INDEX IF NOT EXISTS idx_locked_topics_run_id ON locked_topics (run_id);
 CREATE INDEX IF NOT EXISTS idx_app_users_notifications_enabled ON app_users (notifications_enabled);
 CREATE INDEX IF NOT EXISTS idx_notification_events_run_id ON notification_events (run_id);
+CREATE INDEX IF NOT EXISTS idx_automation_run_history_scheduled_at ON automation_run_history (scheduled_date, scheduled_time);
+CREATE INDEX IF NOT EXISTS idx_automation_run_history_status ON automation_run_history (status);

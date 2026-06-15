@@ -23,6 +23,9 @@ Set these in Render. Do not store real values in code.
 
 ```text
 AD_DOCTOR_DATABASE_PATH=/opt/render/project/src/ad_doctor_data/ad_doctor.db
+AD_DOCTOR_APP_SCHEDULER_ENABLED=1
+AD_DOCTOR_SCHEDULER_POLL_SECONDS=60
+AD_DOCTOR_SCHEDULER_CATCHUP_HOURS=12
 PERPLEXITY_API_KEY=your_key_here
 PERPLEXITY_MODEL=sonar-pro
 PERPLEXITY_ENDPOINT=https://api.perplexity.ai/v1/sonar
@@ -41,23 +44,24 @@ PostgreSQL is not required for the first Render web deployment because the code 
 
 Use PostgreSQL later if you need:
 
-- Render Cron Jobs to run daily automation and write to the same database as the web app.
 - Multiple app instances.
 - Stronger concurrency during long scraping runs.
 - Managed backups and production-grade database operations.
+- Separate Render Cron Jobs that write to the same production data store.
 
 Important: the current code does not use `DATABASE_URL`. Adding `DATABASE_URL` should be part of a deliberate PostgreSQL migration, not a small environment-only change.
 
 ## Daily Automation Note
 
-The in-app local scheduler currently creates a Windows Scheduled Task. That is correct for the local machine but not for Render.
+The Streamlit web service now includes an app-level scheduler. It reads the run times saved in the UI and records each scheduled slot in SQLite before running, so a single slot does not trigger twice.
 
-For Render cloud automation, use either:
+For the current SQLite deployment, use this app scheduler instead of a separate Render Cron Job:
 
-- PostgreSQL plus a Render Cron Job running `python -m src.daily_automation_runner`, or
-- Keep the first deployment web-only and run automation manually from the dashboard until the database migration is done.
+- Set `AD_DOCTOR_APP_SCHEDULER_ENABLED=1`.
+- Keep the web service running on a paid Render plan.
+- Save one or more run times from `Schedule & Keys` in the app UI.
 
-Render Cron Jobs cannot use the web service persistent disk, so SQLite is not the right storage if the cron job must update the same production data.
+Render Cron Jobs are still a good later option after migrating to PostgreSQL. Cron jobs cannot use the web service persistent disk, so SQLite is not the right storage if a separate cron job must update the same production data.
 
 ## Non-Developer Render Steps
 

@@ -216,6 +216,56 @@ def notify_daily_scrape_complete(
     return NotificationSummary(recipients=len(recipients), sent=sent, failed=failed)
 
 
+def send_test_notification_email(
+    recipient: str,
+    database_path=DATABASE_PATH,
+) -> NotificationSummary:
+    normalized_recipient = normalize_email(recipient)
+    subject = "Ad Doctor email test"
+    body = (
+        "This is a test email from Ad Doctor.\n\n"
+        "If you received this, content-ready email alerts are configured correctly."
+    )
+    smtp_settings = load_smtp_settings()
+    if not smtp_settings.is_ready:
+        skipped = f"SMTP is not configured: missing {', '.join(smtp_settings.missing_fields)}."
+        record_notification_event(
+            run_id="email_test",
+            recipient_email=normalized_recipient,
+            subject=subject,
+            status="skipped",
+            error_message=skipped,
+            database_path=database_path,
+        )
+        return NotificationSummary(
+            recipients=1,
+            sent=0,
+            failed=0,
+            skipped_reason=skipped,
+        )
+    try:
+        send_email(smtp_settings, normalized_recipient, subject, body)
+    except Exception as exc:
+        record_notification_event(
+            run_id="email_test",
+            recipient_email=normalized_recipient,
+            subject=subject,
+            status="failed",
+            error_message=str(exc),
+            database_path=database_path,
+        )
+        return NotificationSummary(recipients=1, sent=0, failed=1)
+    record_notification_event(
+        run_id="email_test",
+        recipient_email=normalized_recipient,
+        subject=subject,
+        status="sent",
+        error_message=None,
+        database_path=database_path,
+    )
+    return NotificationSummary(recipients=1, sent=1, failed=0)
+
+
 def build_daily_notification_body(summary, error_message: str | None = None) -> str:
     if error_message:
         return (

@@ -69,6 +69,7 @@ def run_migrations(connection: sqlite3.Connection) -> None:
             id INTEGER PRIMARY KEY CHECK (id = 1),
             enabled INTEGER NOT NULL DEFAULT 1,
             schedule_time TEXT NOT NULL DEFAULT '09:00',
+            schedule_times TEXT NOT NULL DEFAULT '["09:00"]',
             timezone TEXT NOT NULL DEFAULT 'Asia/Kolkata',
             task_name TEXT NOT NULL DEFAULT 'AdDoctorDailyScrape',
             notify_on_success INTEGER NOT NULL DEFAULT 1,
@@ -78,6 +79,12 @@ def run_migrations(connection: sqlite3.Connection) -> None:
         )
         """
     )
+    automation_columns = {
+        row["name"]
+        for row in connection.execute("PRAGMA table_info(automation_settings)").fetchall()
+    }
+    if "schedule_times" not in automation_columns:
+        connection.execute("ALTER TABLE automation_settings ADD COLUMN schedule_times TEXT NOT NULL DEFAULT '[\"09:00\"]'")
     connection.execute(
         """
         CREATE TABLE IF NOT EXISTS app_users (
@@ -112,6 +119,31 @@ def run_migrations(connection: sqlite3.Connection) -> None:
     connection.execute(
         "CREATE INDEX IF NOT EXISTS idx_notification_events_run_id ON notification_events (run_id)"
     )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS automation_run_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            schedule_key TEXT NOT NULL,
+            scheduled_date TEXT NOT NULL,
+            scheduled_time TEXT NOT NULL,
+            timezone TEXT NOT NULL,
+            run_id TEXT,
+            status TEXT NOT NULL,
+            error_message TEXT,
+            started_at TEXT,
+            finished_at TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (schedule_key)
+        )
+        """
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_automation_run_history_scheduled_at ON automation_run_history (scheduled_date, scheduled_time)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_automation_run_history_status ON automation_run_history (status)"
+    )
     ensure_automation_settings(connection)
 
 
@@ -131,9 +163,10 @@ def ensure_automation_settings(connection: sqlite3.Connection) -> None:
             task_name,
             notify_on_success,
             notify_on_failure,
-            fetch_source_time_budget_seconds
+            fetch_source_time_budget_seconds,
+            schedule_times
         )
-        VALUES (1, 1, '09:00', 'Asia/Kolkata', 'AdDoctorDailyScrape', 1, 1, 180)
+        VALUES (1, 1, '09:00', 'Asia/Kolkata', 'AdDoctorDailyScrape', 1, 1, 180, '["09:00"]')
         """
     )
 

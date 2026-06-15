@@ -16,6 +16,12 @@ services:
         value: 3.12.8
       - key: AD_DOCTOR_DATABASE_PATH
         value: /opt/render/project/src/ad_doctor_data/ad_doctor.db
+      - key: AD_DOCTOR_APP_SCHEDULER_ENABLED
+        value: "1"
+      - key: AD_DOCTOR_SCHEDULER_POLL_SECONDS
+        value: "60"
+      - key: AD_DOCTOR_SCHEDULER_CATCHUP_HOURS
+        value: "12"
       - key: PERPLEXITY_API_KEY
         sync: false
       - key: PERPLEXITY_MODEL

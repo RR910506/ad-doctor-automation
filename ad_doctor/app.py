@@ -1,16 +1,24 @@
 from __future__ import annotations
 
 from contextlib import closing
-from datetime import time as clock_time
+import json
+import os
 import re
 
 import streamlit as st
 
+import src.perplexity_research as perplexity_research
 from src.approval_engine import set_content_approval
 from src.automation_engine import (
     get_automation_settings,
     install_or_update_daily_task,
+    parse_schedule_times,
     save_automation_settings,
+)
+from src.app_scheduler import (
+    get_app_scheduler_status,
+    list_automation_run_history,
+    start_app_scheduler,
 )
 from src.config import APP_NAME, DATA_DIR
 from src.article_fetcher import fetch_articles
@@ -42,6 +50,7 @@ from src.notification_engine import (
     list_app_users,
     list_notification_events,
     load_smtp_settings,
+    send_test_notification_email,
     upsert_app_user,
 )
 from src.pipeline_runner import run_real_pipeline
@@ -75,84 +84,239 @@ DASHBOARD_SECTIONS = [
     ("Export Options", "Phase 10 will export approved outputs."),
 ]
 
+ADVANCED_PIPELINE_SECTIONS = [
+    "Article Fetch Status",
+    "Extracted Articles",
+    "Extracted Topics",
+    "Qualified Topics",
+    "Topic Score Breakdown",
+    "Locked Topics",
+    "Research Dossier",
+    "Campaign Dissection",
+]
+
+MAIN_PAGES = [
+    "Content Studio",
+    "Sources",
+    "Schedule & Keys",
+    "Review & Export",
+    "Advanced Pipeline",
+]
+
 
 def render_dashboard_shell() -> None:
     st.set_page_config(page_title=APP_NAME, layout="wide")
     initialize_database()
-
-    st.title(APP_NAME)
-    st.caption("Local-first advertising intelligence and content creation MVP")
+    apply_runtime_provider_settings()
+    start_app_scheduler()
+    inject_app_styles()
 
     with st.sidebar:
-        st.header("MVP Status")
-        st.info("Local MVP pipeline is available through Phase 10.")
+        st.header(APP_NAME)
+        st.caption("Marketing intelligence workspace")
+        page = st.radio("Workspace", MAIN_PAGES, label_visibility="collapsed")
         render_user_session_controls()
-        st.subheader("Data Rule")
-        st.write("Topic discovery must use only approved XLS or Google Sheet sources.")
-        if st.button("Run demo pipeline"):
-            with st.spinner("Running local demo pipeline..."):
-                try:
-                    summary = run_demo_pipeline()
-                    st.success(
-                        f"Demo complete: {summary.topics_locked} locked topic(s), "
-                        f"{summary.blog_drafts_created} blog draft(s), "
-                        f"{summary.social_drafts_created} social draft(s)."
-                    )
-                except Exception as exc:
-                    st.error(str(exc))
-        if st.button("Run real automation"):
-            with st.spinner("Running real approved-source automation..."):
-                try:
-                    summary = run_real_pipeline()
-                    st.success(
-                        f"Automation complete: {summary.qualified_topics} qualified, "
-                        f"{summary.locked_topics} locked, {summary.blog_drafts} blog draft(s), "
-                        f"{summary.social_drafts} social draft(s)."
-                    )
-                except Exception as exc:
-                    st.error(str(exc))
+        st.divider()
+        render_provider_status()
+        if st.button("Run content automation", type="primary", use_container_width=True):
+            run_full_automation_from_ui()
 
-    st.subheader("Dashboard")
-    tabs = st.tabs([section_name for section_name, _ in DASHBOARD_SECTIONS])
+    st.title(APP_NAME)
+    st.caption("Diagnose marketing stories. Generate blog and social drafts.")
 
-    for tab, (section_name, description) in zip(tabs, DASHBOARD_SECTIONS):
+    if page == "Content Studio":
+        render_content_studio()
+    elif page == "Sources":
+        render_sources_page()
+    elif page == "Schedule & Keys":
+        render_schedule_and_keys()
+    elif page == "Review & Export":
+        render_review_export_page()
+    elif page == "Advanced Pipeline":
+        render_advanced_pipeline()
+
+
+def inject_app_styles() -> None:
+    st.markdown(
+        """
+        <style>
+        [data-testid="stSidebar"] .stButton button { width: 100%; }
+        .ad-muted { color: rgba(250,250,250,.68); font-size: .95rem; }
+        .ad-section-note {
+            border: 1px solid rgba(250,250,250,.12);
+            border-radius: 8px;
+            padding: .85rem 1rem;
+            background: rgba(255,255,255,.03);
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_content_studio() -> None:
+    st.subheader("Content Studio")
+    st.write("Review the latest Ad Doctor drafts without digging through the pipeline.")
+    render_content_snapshot()
+    render_credit_usage_summary()
+
+    action_columns = st.columns([1, 1, 2])
+    with action_columns[0]:
+        if st.button("Generate drafts only", type="primary"):
+            try:
+                apply_runtime_provider_settings()
+                summary = generate_content_outputs()
+                st.success(
+                    f"Generated {summary.blog_drafts_created} blog draft(s) and "
+                    f"{summary.social_drafts_created} social draft(s)."
+                )
+            except Exception as exc:
+                st.error(str(exc))
+    with action_columns[1]:
+        if st.button("Run full scan now"):
+            run_full_automation_from_ui()
+
+    social_tab, blog_tab = st.tabs(["Social Media Drafts", "Blog Drafts"])
+    with social_tab:
+        render_content_drafts("social", show_generate_button=False)
+    with blog_tab:
+        render_content_drafts("blog", show_generate_button=False)
+
+
+def render_sources_page() -> None:
+    st.subheader("Sources")
+    st.write("Add the approved websites or Google Sheet that Ad Doctor is allowed to scan.")
+    render_source_input()
+
+
+def render_schedule_and_keys() -> None:
+    st.subheader("Schedule & Keys")
+    schedule_tab, provider_tab, email_tab = st.tabs(["Run Times", "API Keys & Models", "Email Alerts"])
+    with schedule_tab:
+        render_automation_alerts(show_recipients=False, show_smtp_status=False)
+    with provider_tab:
+        render_provider_settings()
+    with email_tab:
+        render_email_alert_settings()
+
+
+def render_review_export_page() -> None:
+    st.subheader("Review & Export")
+    review_tab, export_tab = st.tabs(["Approve Drafts", "Export"])
+    with review_tab:
+        render_approval_queue()
+    with export_tab:
+        render_export_options()
+
+
+def render_advanced_pipeline() -> None:
+    st.subheader("Advanced Pipeline")
+    st.write("Use this area only when you need to inspect scraping, qualification, or research details.")
+    tabs = st.tabs(ADVANCED_PIPELINE_SECTIONS)
+    renderers = {
+        "Article Fetch Status": render_article_fetch_status,
+        "Extracted Articles": render_extracted_articles,
+        "Extracted Topics": render_extracted_topics,
+        "Qualified Topics": render_qualified_topics,
+        "Topic Score Breakdown": render_topic_score_breakdown,
+        "Locked Topics": render_locked_topics,
+        "Research Dossier": render_research_dossier,
+        "Campaign Dissection": render_campaign_dissection,
+    }
+    for tab, section_name in zip(tabs, ADVANCED_PIPELINE_SECTIONS):
         with tab:
-            st.markdown(f"### {section_name}")
-            if section_name == "Source Input":
-                render_source_input()
-            elif section_name == "Article Fetch Status":
-                render_article_fetch_status()
-            elif section_name == "Extracted Articles":
-                render_extracted_articles()
-            elif section_name == "Extracted Topics":
-                render_extracted_topics()
-            elif section_name == "Qualified Topics":
-                render_qualified_topics()
-            elif section_name == "Topic Score Breakdown":
-                render_topic_score_breakdown()
-            elif section_name == "Locked Topics":
-                render_locked_topics()
-            elif section_name == "Research Dossier":
-                render_research_dossier()
-            elif section_name == "Campaign Dissection":
-                render_campaign_dissection()
-            elif section_name == "Blog Draft":
-                render_content_drafts("blog")
-            elif section_name == "Social Media Draft":
-                render_content_drafts("social")
-            elif section_name == "Approval Queue":
-                render_approval_queue()
-            elif section_name == "Export Options":
-                render_export_options()
-            elif section_name == "Automation & Alerts":
-                render_automation_alerts()
-            else:
-                st.write(description)
-                st.empty()
+            renderers[section_name]()
+
+
+def run_full_automation_from_ui() -> None:
+    with st.spinner("Scanning approved sources, qualifying topics, and preparing drafts..."):
+        try:
+            apply_runtime_provider_settings()
+            settings = get_automation_settings()
+            summary = run_real_pipeline(
+                fetch_source_time_budget_seconds=settings.fetch_source_time_budget_seconds,
+            )
+            st.session_state["last_pipeline_summary"] = summary.__dict__
+            st.success(
+                f"Done: {summary.qualified_topics} qualified topic(s), "
+                f"{summary.blog_drafts} blog draft(s), {summary.social_drafts} social draft(s)."
+            )
+        except Exception as exc:
+            st.error(str(exc))
+
+
+def render_content_snapshot() -> None:
+    with closing(get_connection()) as connection:
+        article_total = count_articles(connection)
+        qualified_total = count_topics(connection, status="qualified")
+        outputs = list_content_outputs(connection)
+        approval_items = list_approval_queue(connection)
+    social_ready = sum(
+        1
+        for output in outputs
+        if output["content_type"] == "social" and output["approval_status"] != "rejected"
+    )
+    blog_ready = sum(
+        1
+        for output in outputs
+        if output["content_type"] == "blog" and output["approval_status"] != "rejected"
+    )
+    pending_review = sum(1 for item in approval_items if item["approval_status"] == "pending")
+    metrics = st.columns(4)
+    metrics[0].metric("Social drafts", social_ready)
+    metrics[1].metric("Blog drafts", blog_ready)
+    metrics[2].metric("Pending review", pending_review)
+    metrics[3].metric("Qualified topics", qualified_total)
+    st.caption(f"{article_total} approved-source articles are stored for analysis.")
+
+
+def render_credit_usage_summary() -> None:
+    usage = estimate_credit_usage()
+    metrics = st.columns(4)
+    metrics[0].metric("Estimated API credits", usage["estimated_api_credits"])
+    metrics[1].metric("Research calls", usage["research_calls"])
+    metrics[2].metric("Tracked tokens", usage["total_tokens"])
+    metrics[3].metric("Local draft credits", 0)
+    st.caption(
+        "Credits are tracked from provider responses when available. "
+        "Local scraping and template drafting do not consume AI credits."
+    )
+
+
+def estimate_credit_usage() -> dict[str, int]:
+    with closing(get_connection()) as connection:
+        latest_locked_run_id = get_latest_locked_run_id(connection)
+        dossiers = (
+            list_research_dossiers(connection, run_id=latest_locked_run_id)
+            if latest_locked_run_id
+            else []
+        )
+    research_calls = 0
+    total_tokens = 0
+    for dossier in dossiers:
+        try:
+            payload = json.loads(dossier.get("dossier_json") or "{}")
+        except (TypeError, ValueError):
+            payload = {}
+        if payload.get("status") == "completed":
+            research_calls += 1
+        usage = payload.get("usage") if isinstance(payload, dict) else None
+        if isinstance(usage, dict):
+            total_tokens += int(
+                usage.get("total_tokens")
+                or usage.get("total")
+                or usage.get("tokens")
+                or 0
+            )
+    return {
+        "estimated_api_credits": research_calls,
+        "research_calls": research_calls,
+        "total_tokens": total_tokens,
+    }
 
 
 def render_user_session_controls() -> None:
-    st.subheader("User Session")
+    st.subheader("Your Access")
     with st.form("user_session_form"):
         email = st.text_input("Email", value=st.session_state.get("ad_doctor_user_email", ""))
         display_name = st.text_input(
@@ -160,10 +324,10 @@ def render_user_session_controls() -> None:
             value=st.session_state.get("ad_doctor_user_name", ""),
         )
         notifications_enabled = st.checkbox(
-            "Daily content email",
+            "Email me when content is ready",
             value=st.session_state.get("ad_doctor_notifications_enabled", True),
         )
-        submitted = st.form_submit_button("Save session")
+        submitted = st.form_submit_button("Save")
     if not submitted:
         return
     try:
@@ -179,6 +343,110 @@ def render_user_session_controls() -> None:
         st.success("Session saved.")
     except Exception as exc:
         st.error(str(exc))
+
+
+def render_provider_status() -> None:
+    research_model = st.session_state.get("ad_doctor_research_model", "sonar-pro")
+    has_perplexity_key = bool(st.session_state.get("ad_doctor_perplexity_api_key"))
+    has_openrouter_key = bool(st.session_state.get("ad_doctor_openrouter_api_key"))
+    st.caption(f"Research model: {research_model}")
+    if has_perplexity_key or has_openrouter_key:
+        st.success("Session API key ready.")
+    else:
+        st.info("Using environment keys or local fallback.")
+
+
+def render_provider_settings() -> None:
+    st.write("Add API keys and choose models for this browser session. Keys are not written to code.")
+    research_provider = st.selectbox(
+        "Research engine",
+        ["Perplexity"],
+        index=0,
+        help="Perplexity is currently wired into the research step.",
+    )
+    perplexity_key = st.text_input(
+        "Perplexity API key",
+        value=st.session_state.get("ad_doctor_perplexity_api_key", ""),
+        type="password",
+        help="Used for topic research. Leave blank to use the server environment key.",
+    )
+    research_model = st.text_input(
+        "Research model",
+        value=st.session_state.get("ad_doctor_research_model", "sonar-pro"),
+        help="Example: sonar-pro",
+    )
+    perplexity_endpoint = st.text_input(
+        "Perplexity endpoint",
+        value=st.session_state.get(
+            "ad_doctor_perplexity_endpoint",
+            "https://api.perplexity.ai/v1/sonar",
+        ),
+    )
+    st.divider()
+    openrouter_key = st.text_input(
+        "OpenRouter API key",
+        value=st.session_state.get("ad_doctor_openrouter_api_key", ""),
+        type="password",
+        help="Stored for this browser session. The current content writer is still the local Ad Doctor template engine.",
+    )
+    writer_model = st.text_input(
+        "Writing model",
+        value=st.session_state.get(
+            "ad_doctor_writer_model",
+            os.getenv("OPENROUTER_MODEL", "local-ad-doctor-template") or "local-ad-doctor-template",
+        ),
+        help="The local template engine uses no AI credits. OpenRouter support can be wired into the writing step next.",
+    )
+    action_columns = st.columns([1, 1, 2])
+    with action_columns[0]:
+        if st.button("Save model setup", type="primary"):
+            st.session_state["ad_doctor_research_provider"] = research_provider
+            st.session_state["ad_doctor_perplexity_api_key"] = perplexity_key.strip()
+            st.session_state["ad_doctor_research_model"] = research_model.strip() or "sonar-pro"
+            st.session_state["ad_doctor_perplexity_endpoint"] = (
+                perplexity_endpoint.strip() or "https://api.perplexity.ai/v1/sonar"
+            )
+            st.session_state["ad_doctor_openrouter_api_key"] = openrouter_key.strip()
+            st.session_state["ad_doctor_writer_model"] = writer_model.strip() or "local-ad-doctor-template"
+            apply_runtime_provider_settings()
+            st.success("Model setup saved for this session.")
+    with action_columns[1]:
+        if st.button("Clear session keys"):
+            for key in [
+                "ad_doctor_perplexity_api_key",
+                "ad_doctor_openrouter_api_key",
+            ]:
+                st.session_state.pop(key, None)
+            apply_runtime_provider_settings()
+            st.info("Session keys cleared.")
+
+    st.markdown(
+        """
+        <div class="ad-section-note">
+        Fetching articles uses the source scraper, not an AI model. Research uses Perplexity.
+        Draft writing currently uses the local Ad Doctor content framework, so it consumes no AI credits.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def apply_runtime_provider_settings() -> None:
+    api_key = st.session_state.get("ad_doctor_perplexity_api_key")
+    model = st.session_state.get("ad_doctor_research_model")
+    endpoint = st.session_state.get("ad_doctor_perplexity_endpoint")
+    perplexity_research.PERPLEXITY_API_KEY = (
+        str(api_key).strip() if api_key is not None else os.getenv("PERPLEXITY_API_KEY", "").strip()
+    )
+    perplexity_research.PERPLEXITY_MODEL = (
+        str(model).strip() if model else os.getenv("PERPLEXITY_MODEL", "sonar-pro").strip() or "sonar-pro"
+    )
+    perplexity_research.PERPLEXITY_ENDPOINT = (
+        str(endpoint).strip()
+        if endpoint
+        else os.getenv("PERPLEXITY_ENDPOINT", "https://api.perplexity.ai/v1/sonar").strip()
+        or "https://api.perplexity.ai/v1/sonar"
+    )
 
 
 def render_source_input() -> None:
@@ -537,11 +805,13 @@ def render_campaign_dissection() -> None:
             st.markdown(output["output_markdown"])
 
 
-def render_content_drafts(content_type: str) -> None:
+def render_content_drafts(content_type: str, show_generate_button: bool = True) -> None:
     label = "blog" if content_type == "blog" else "social media"
-    st.write(f"Generate and review {label} drafts. Drafts stay pending until Phase 10 approval.")
-    if st.button(f"Generate {label} drafts", type="primary"):
+    if show_generate_button:
+        st.write(f"Generate and review {label} drafts. Drafts stay pending until approval.")
+    if show_generate_button and st.button(f"Generate {label} drafts", type="primary"):
         try:
+            apply_runtime_provider_settings()
             summary = generate_content_outputs()
             st.success(
                 f"Generated {summary.blog_drafts_created} blog draft(s) and "
@@ -857,22 +1127,33 @@ def render_export_options() -> None:
         st.info("No exports have been run yet.")
 
 
-def render_automation_alerts() -> None:
+def render_automation_alerts(
+    *,
+    show_recipients: bool = True,
+    show_smtp_status: bool = True,
+) -> None:
     settings = get_automation_settings()
-    st.write("Daily approved-source scraping schedule and completion alerts.")
+    st.write("Choose when Ad Doctor should run the approved-source scan.")
+    scheduler_status = get_app_scheduler_status()
+    if scheduler_status.enabled_by_env and scheduler_status.running:
+        st.success("Cloud/local app scheduler is running.")
+    elif scheduler_status.enabled_by_env:
+        st.warning(scheduler_status.message)
+    else:
+        st.warning("App scheduler is disabled. Set AD_DOCTOR_APP_SCHEDULER_ENABLED=1 to enable cloud auto-runs.")
 
-    hour, minute = parse_schedule_time(settings.schedule_time)
-    settings_columns = st.columns(4)
+    schedule_times = settings.schedule_times or (settings.schedule_time,)
+    settings_columns = st.columns([1, 2, 1, 1])
     with settings_columns[0]:
-        enabled = st.checkbox("Daily scraping enabled", value=settings.enabled)
+        enabled = st.checkbox("Auto-run enabled", value=settings.enabled)
     with settings_columns[1]:
-        schedule_value = st.time_input(
-            "Run time",
-            value=clock_time(hour=hour, minute=minute),
-            step=900,
+        schedule_values_text = st.text_input(
+            "Daily run times",
+            value=", ".join(schedule_times),
+            help="Use 24-hour time. Example: 09:00, 13:30, 18:00",
         )
     with settings_columns[2]:
-        notify_success = st.checkbox("Mail on success", value=settings.notify_on_success)
+        notify_success = st.checkbox("Mail when done", value=settings.notify_on_success)
     with settings_columns[3]:
         notify_failure = st.checkbox("Mail on failure", value=settings.notify_on_failure)
 
@@ -886,9 +1167,11 @@ def render_automation_alerts() -> None:
 
     if st.button("Save automation settings", type="primary"):
         try:
+            normalized_schedule_times = parse_schedule_times(schedule_values_text)
             saved = save_automation_settings(
                 enabled=enabled,
-                schedule_time=schedule_value.strftime("%H:%M"),
+                schedule_time=normalized_schedule_times[0],
+                schedule_times=normalized_schedule_times,
                 notify_on_success=notify_success,
                 notify_on_failure=notify_failure,
                 fetch_source_time_budget_seconds=int(budget),
@@ -896,13 +1179,35 @@ def render_automation_alerts() -> None:
             scheduler_result = install_or_update_daily_task(saved)
             if scheduler_result.success:
                 st.success(scheduler_result.message)
-            else:
+            elif scheduler_result.supported:
                 st.warning(scheduler_result.message)
+            else:
+                st.info(
+                    "Settings saved. The app scheduler will use these run times while the Streamlit service is running."
+                )
         except Exception as exc:
             st.error(str(exc))
 
+    st.caption(
+        "On Render, the app scheduler checks these times inside the running Streamlit service. "
+        "On Windows, saving can also create local Scheduled Tasks."
+    )
+    history = list_automation_run_history(limit=25)
+    if history:
+        st.markdown("#### Recent scheduled runs")
+        st.dataframe(history, width="stretch", hide_index=True)
+    else:
+        st.info("No scheduled auto-runs have been recorded yet.")
+
+    if not show_recipients and not show_smtp_status:
+        return
+
     st.divider()
-    st.markdown("#### Mail recipients")
+    render_email_alert_settings(show_smtp_status=show_smtp_status)
+
+
+def render_email_alert_settings(*, show_smtp_status: bool = True) -> None:
+    st.markdown("#### Content-ready emails")
     recipient_columns = st.columns([2, 2, 1])
     with recipient_columns[0]:
         recipient_email = st.text_input("User email")
@@ -939,19 +1244,42 @@ def render_automation_alerts() -> None:
     else:
         st.info("No notification users saved yet.")
 
-    st.divider()
-    st.markdown("#### SMTP status")
-    smtp_settings = load_smtp_settings()
-    if smtp_settings.is_ready:
-        st.success("SMTP is configured.")
-    else:
-        st.warning(f"Missing SMTP setting(s): {', '.join(smtp_settings.missing_fields)}")
+    if show_smtp_status:
+        st.divider()
+        st.markdown("#### Mail delivery status")
+        smtp_settings = load_smtp_settings()
+        if smtp_settings.is_ready:
+            st.success("Email sending is configured.")
+            st.caption(f"Sender: {smtp_settings.from_email}")
+        else:
+            st.warning(f"Email sending needs: {', '.join(smtp_settings.missing_fields)}")
+            st.caption(
+                "Set these in Render Environment Variables or in a local .env file. "
+                "Passwords and API keys are not stored in code."
+            )
 
-    events = list_notification_events(limit=50)
-    if events:
-        st.dataframe(events, width="stretch", hide_index=True)
-    else:
-        st.info("No notification events yet.")
+        test_email = st.text_input(
+            "Send test email to",
+            value=st.session_state.get("ad_doctor_user_email", ""),
+            key="email_test_recipient",
+        )
+        if st.button("Send test email"):
+            try:
+                summary = send_test_notification_email(test_email)
+                if summary.sent:
+                    st.success("Test email sent.")
+                elif summary.skipped_reason:
+                    st.warning(summary.skipped_reason)
+                else:
+                    st.error("Test email failed. Check the notification events below.")
+            except Exception as exc:
+                st.error(str(exc))
+
+        events = list_notification_events(limit=50)
+        if events:
+            st.dataframe(events, width="stretch", hide_index=True)
+        else:
+            st.info("No notification events yet.")
 
 
 def parse_schedule_time(value: str) -> tuple[int, int]:

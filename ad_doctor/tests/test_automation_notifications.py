@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from contextlib import closing
+from datetime import datetime
 from pathlib import Path
 from unittest import mock
 
@@ -15,13 +16,16 @@ from src.automation_engine import (
     AutomationSettings,
     get_automation_settings,
     install_or_update_daily_task,
+    parse_schedule_times,
     save_automation_settings,
     validate_schedule_time,
 )
+from src.app_scheduler import claim_scheduled_run, list_automation_run_history
 from src.db import get_connection, initialize_database
 from src.notification_engine import (
     list_notification_events,
     notify_daily_scrape_complete,
+    send_test_notification_email,
     upsert_app_user,
 )
 
@@ -56,6 +60,26 @@ class AutomationSettingsTest(unittest.TestCase):
         self.assertEqual(reloaded.schedule_time, "08:30")
         self.assertFalse(reloaded.notify_on_success)
         self.assertEqual(reloaded.fetch_source_time_budget_seconds, 240)
+
+    def test_multiple_schedule_times_can_be_saved(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            database_path = Path(temporary_directory) / "ad_doctor.db"
+
+            saved = save_automation_settings(
+                enabled=True,
+                schedule_time="09:00",
+                schedule_times=("09:00", "13:30", "18:00"),
+                database_path=database_path,
+            )
+            reloaded = get_automation_settings(database_path=database_path)
+
+        self.assertEqual(saved.schedule_time, "09:00")
+        self.assertEqual(reloaded.schedule_times, ("09:00", "13:30", "18:00"))
+
+    def test_parse_schedule_times_dedupes_and_validates(self) -> None:
+        self.assertEqual(parse_schedule_times("09:00, 13:30, 09:00"), ("09:00", "13:30"))
+        with self.assertRaises(ValueError):
+            parse_schedule_times("09:00, 28:00")
 
     def test_invalid_schedule_time_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
@@ -137,6 +161,62 @@ class NotificationEngineTest(unittest.TestCase):
         self.assertEqual(notification_summary.sent, 0)
         self.assertEqual(events[0]["status"], "skipped")
         self.assertIn("SMTP is not configured", events[0]["error_message"])
+
+    def test_test_email_records_skipped_event_when_smtp_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            database_path = Path(temporary_directory) / "ad_doctor.db"
+            initialize_database(
+                database_path=database_path,
+                schema_path=PROJECT_DIR / "database" / "schema.sql",
+            )
+            env_without_smtp = {
+                "AD_DOCTOR_SMTP_HOST": "",
+                "AD_DOCTOR_SMTP_FROM": "",
+                "AD_DOCTOR_SMTP_USERNAME": "",
+                "AD_DOCTOR_SMTP_PASSWORD": "",
+            }
+
+            with mock.patch.dict(os.environ, env_without_smtp, clear=False):
+                notification_summary = send_test_notification_email(
+                    "user@example.com",
+                    database_path=database_path,
+                )
+            events = list_notification_events(database_path=database_path)
+
+        self.assertEqual(notification_summary.recipients, 1)
+        self.assertEqual(notification_summary.sent, 0)
+        self.assertEqual(events[0]["run_id"], "email_test")
+        self.assertEqual(events[0]["status"], "skipped")
+
+
+class AppSchedulerTest(unittest.TestCase):
+    def test_schedule_claim_only_happens_once_per_slot(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            database_path = Path(temporary_directory) / "ad_doctor.db"
+            initialize_database(
+                database_path=database_path,
+                schema_path=PROJECT_DIR / "database" / "schema.sql",
+            )
+            scheduled_at = datetime(2026, 6, 15, 9, 0)
+
+            first_claim = claim_scheduled_run(
+                scheduled_at=scheduled_at,
+                schedule_time="09:00",
+                timezone_name="Asia/Kolkata",
+                database_path=database_path,
+            )
+            second_claim = claim_scheduled_run(
+                scheduled_at=scheduled_at,
+                schedule_time="09:00",
+                timezone_name="Asia/Kolkata",
+                database_path=database_path,
+            )
+            history = list_automation_run_history(database_path=database_path)
+
+        self.assertEqual(first_claim, "2026-06-15T09:00@Asia/Kolkata")
+        self.assertIsNone(second_claim)
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]["status"], "running")
 
 
 if __name__ == "__main__":
