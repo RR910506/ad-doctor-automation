@@ -50,6 +50,7 @@ from src.notification_engine import (
     list_app_users,
     list_notification_events,
     load_smtp_settings,
+    save_smtp_settings,
     send_test_notification_email,
     upsert_app_user,
 )
@@ -1136,22 +1137,29 @@ def render_automation_alerts(
     st.write("Choose when Ad Doctor should run the approved-source scan.")
     scheduler_status = get_app_scheduler_status()
     if scheduler_status.enabled_by_env and scheduler_status.running:
-        st.success("Cloud/local app scheduler is running.")
+        st.success("Scheduler is active. Saved run times will trigger automatically while this app is running.")
     elif scheduler_status.enabled_by_env:
         st.warning(scheduler_status.message)
     else:
-        st.warning("App scheduler is disabled. Set AD_DOCTOR_APP_SCHEDULER_ENABLED=1 to enable cloud auto-runs.")
+        st.warning("Scheduler is disabled. Set AD_DOCTOR_APP_SCHEDULER_ENABLED=1 only if you intentionally turned it off.")
 
     schedule_times = settings.schedule_times or (settings.schedule_time,)
     settings_columns = st.columns([1, 2, 1, 1])
     with settings_columns[0]:
         enabled = st.checkbox("Auto-run enabled", value=settings.enabled)
     with settings_columns[1]:
-        schedule_values_text = st.text_input(
+        schedule_values_text = st.text_area(
             "Daily run times",
-            value=", ".join(schedule_times),
-            help="Use 24-hour time. Example: 09:00, 13:30, 18:00",
+            value="\n".join(schedule_times),
+            height=96,
+            help="Use one time per line, or separate times with commas. Example: 09:00, 13:30, 18:00",
+            placeholder="09:00\n13:30\n18:00",
         )
+        try:
+            parsed_schedule_times = parse_schedule_times(schedule_values_text)
+            st.caption(f"Will run daily at: {', '.join(parsed_schedule_times)}")
+        except Exception:
+            st.caption("Enter times like 09:00, 13:30, 18:00")
     with settings_columns[2]:
         notify_success = st.checkbox("Mail when done", value=settings.notify_on_success)
     with settings_columns[3]:
@@ -1246,16 +1254,57 @@ def render_email_alert_settings(*, show_smtp_status: bool = True) -> None:
 
     if show_smtp_status:
         st.divider()
-        st.markdown("#### Mail delivery status")
+        st.markdown("#### Sender email setup")
         smtp_settings = load_smtp_settings()
+        with st.form("smtp_settings_form"):
+            smtp_columns = st.columns([2, 1])
+            with smtp_columns[0]:
+                smtp_host = st.text_input("SMTP host", value=smtp_settings.host or "")
+            with smtp_columns[1]:
+                smtp_port = st.number_input(
+                    "SMTP port",
+                    min_value=1,
+                    max_value=65535,
+                    value=int(smtp_settings.port or 587),
+                    step=1,
+                )
+            smtp_username = st.text_input("SMTP username", value=smtp_settings.username or "")
+            smtp_password = st.text_input(
+                "SMTP password or app password",
+                value="",
+                type="password",
+                help="Leave blank to keep the existing saved password.",
+            )
+            smtp_from = st.text_input("Sender email", value=smtp_settings.from_email or "")
+            smtp_use_tls = st.checkbox("Use TLS", value=smtp_settings.use_tls)
+            submitted_smtp = st.form_submit_button("Save email sender settings", type="primary")
+            if submitted_smtp:
+                try:
+                    saved_smtp = save_smtp_settings(
+                        smtp_host=smtp_host,
+                        smtp_port=int(smtp_port),
+                        smtp_username=smtp_username or None,
+                        smtp_password=smtp_password or None,
+                        smtp_from=smtp_from,
+                        use_tls=smtp_use_tls,
+                    )
+                    if saved_smtp.is_ready:
+                        st.success("Email sender settings saved.")
+                    else:
+                        st.warning(f"Saved, but still missing: {', '.join(saved_smtp.missing_fields)}")
+                except Exception as exc:
+                    st.error(str(exc))
+
+        smtp_settings = load_smtp_settings()
+        st.markdown("#### Mail delivery status")
         if smtp_settings.is_ready:
             st.success("Email sending is configured.")
-            st.caption(f"Sender: {smtp_settings.from_email}")
+            password_status = "password available" if smtp_settings.password else "no password saved"
+            st.caption(f"Sender: {smtp_settings.from_email} | Source: {smtp_settings.source} | {password_status}")
         else:
             st.warning(f"Email sending needs: {', '.join(smtp_settings.missing_fields)}")
             st.caption(
-                "Set these in Render Environment Variables or in a local .env file. "
-                "Passwords and API keys are not stored in code."
+                "Save SMTP host and sender email above. Passwords are stored in the app database, not in code."
             )
 
         test_email = st.text_input(

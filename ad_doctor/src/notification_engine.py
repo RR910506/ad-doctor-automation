@@ -23,6 +23,7 @@ class SmtpSettings:
     password: str | None
     from_email: str | None
     use_tls: bool
+    source: str = "environment"
 
     @property
     def missing_fields(self) -> list[str]:
@@ -48,15 +49,97 @@ class NotificationSummary:
     skipped_reason: str | None = None
 
 
-def load_smtp_settings() -> SmtpSettings:
+def load_smtp_settings(database_path=DATABASE_PATH) -> SmtpSettings:
+    saved = load_saved_smtp_settings(database_path=database_path)
     return SmtpSettings(
-        host=os.getenv("AD_DOCTOR_SMTP_HOST") or None,
-        port=int(os.getenv("AD_DOCTOR_SMTP_PORT") or "587"),
-        username=os.getenv("AD_DOCTOR_SMTP_USERNAME") or None,
-        password=os.getenv("AD_DOCTOR_SMTP_PASSWORD") or None,
-        from_email=os.getenv("AD_DOCTOR_SMTP_FROM") or None,
-        use_tls=(os.getenv("AD_DOCTOR_SMTP_USE_TLS") or "1").strip().lower() not in {"0", "false", "no"},
+        host=saved.get("smtp_host") or os.getenv("AD_DOCTOR_SMTP_HOST") or None,
+        port=int(saved.get("smtp_port") or os.getenv("AD_DOCTOR_SMTP_PORT") or "587"),
+        username=saved.get("smtp_username") or os.getenv("AD_DOCTOR_SMTP_USERNAME") or None,
+        password=saved.get("smtp_password") or os.getenv("AD_DOCTOR_SMTP_PASSWORD") or None,
+        from_email=saved.get("smtp_from") or os.getenv("AD_DOCTOR_SMTP_FROM") or None,
+        use_tls=parse_bool(saved.get("use_tls"), default_env=os.getenv("AD_DOCTOR_SMTP_USE_TLS")),
+        source="saved" if saved else "environment",
     )
+
+
+def load_saved_smtp_settings(database_path=DATABASE_PATH) -> dict[str, Any]:
+    initialize_database(database_path=database_path)
+    with closing(get_connection(database_path)) as connection:
+        row = connection.execute(
+            """
+            SELECT
+                smtp_host,
+                smtp_port,
+                smtp_username,
+                smtp_password,
+                smtp_from,
+                use_tls,
+                updated_at
+            FROM email_settings
+            WHERE id = 1
+            """
+        ).fetchone()
+    return dict(row) if row else {}
+
+
+def save_smtp_settings(
+    *,
+    smtp_host: str,
+    smtp_port: int,
+    smtp_username: str | None,
+    smtp_password: str | None,
+    smtp_from: str,
+    use_tls: bool,
+    keep_existing_password: bool = True,
+    database_path=DATABASE_PATH,
+) -> SmtpSettings:
+    initialize_database(database_path=database_path)
+    existing = load_saved_smtp_settings(database_path=database_path)
+    password_to_store = (smtp_password or "").strip()
+    if keep_existing_password and not password_to_store:
+        password_to_store = str(existing.get("smtp_password") or "")
+    with closing(get_connection(database_path)) as connection:
+        connection.execute(
+            """
+            INSERT INTO email_settings (
+                id,
+                smtp_host,
+                smtp_port,
+                smtp_username,
+                smtp_password,
+                smtp_from,
+                use_tls,
+                updated_at
+            )
+            VALUES (1, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(id) DO UPDATE SET
+                smtp_host = excluded.smtp_host,
+                smtp_port = excluded.smtp_port,
+                smtp_username = excluded.smtp_username,
+                smtp_password = excluded.smtp_password,
+                smtp_from = excluded.smtp_from,
+                use_tls = excluded.use_tls,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                smtp_host.strip() or None,
+                int(smtp_port),
+                (smtp_username or "").strip() or None,
+                password_to_store or None,
+                smtp_from.strip() or None,
+                1 if use_tls else 0,
+            ),
+        )
+        connection.commit()
+    return load_smtp_settings(database_path=database_path)
+
+
+def parse_bool(value: Any, *, default_env: str | None = None) -> bool:
+    if value is None:
+        value = default_env
+    if value is None:
+        return True
+    return str(value).strip().lower() not in {"0", "false", "no", "off"}
 
 
 def upsert_app_user(
@@ -164,7 +247,7 @@ def notify_daily_scrape_complete(
     recipients = list_notification_recipients(database_path=database_path)
     if not recipients:
         return NotificationSummary(recipients=0, sent=0, failed=0, skipped_reason="No notification recipients.")
-    smtp_settings = load_smtp_settings()
+    smtp_settings = load_smtp_settings(database_path=database_path)
     run_id = str(getattr(summary, "run_id", "unknown"))
     subject = (
         "Ad Doctor scraping failed"
@@ -226,7 +309,7 @@ def send_test_notification_email(
         "This is a test email from Ad Doctor.\n\n"
         "If you received this, content-ready email alerts are configured correctly."
     )
-    smtp_settings = load_smtp_settings()
+    smtp_settings = load_smtp_settings(database_path=database_path)
     if not smtp_settings.is_ready:
         skipped = f"SMTP is not configured: missing {', '.join(smtp_settings.missing_fields)}."
         record_notification_event(

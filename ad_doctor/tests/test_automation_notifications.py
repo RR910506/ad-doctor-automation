@@ -21,10 +21,13 @@ from src.automation_engine import (
     validate_schedule_time,
 )
 from src.app_scheduler import claim_scheduled_run, list_automation_run_history
+from src.app_scheduler import is_app_scheduler_enabled
 from src.db import get_connection, initialize_database
 from src.notification_engine import (
+    load_smtp_settings,
     list_notification_events,
     notify_daily_scrape_complete,
+    save_smtp_settings,
     send_test_notification_email,
     upsert_app_user,
 )
@@ -190,6 +193,10 @@ class NotificationEngineTest(unittest.TestCase):
 
 
 class AppSchedulerTest(unittest.TestCase):
+    def test_app_scheduler_is_enabled_by_default(self) -> None:
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertTrue(is_app_scheduler_enabled())
+
     def test_schedule_claim_only_happens_once_per_slot(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             database_path = Path(temporary_directory) / "ad_doctor.db"
@@ -217,6 +224,33 @@ class AppSchedulerTest(unittest.TestCase):
         self.assertIsNone(second_claim)
         self.assertEqual(len(history), 1)
         self.assertEqual(history[0]["status"], "running")
+
+
+class SmtpSettingsTest(unittest.TestCase):
+    def test_saved_smtp_settings_are_loaded_from_database(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            database_path = Path(temporary_directory) / "ad_doctor.db"
+            initialize_database(
+                database_path=database_path,
+                schema_path=PROJECT_DIR / "database" / "schema.sql",
+            )
+            saved = save_smtp_settings(
+                smtp_host="smtp.example.com",
+                smtp_port=587,
+                smtp_username="sender@example.com",
+                smtp_password="secret",
+                smtp_from="sender@example.com",
+                use_tls=True,
+                database_path=database_path,
+            )
+            loaded = load_smtp_settings(database_path=database_path)
+
+        self.assertTrue(saved.is_ready)
+        self.assertEqual(loaded.host, "smtp.example.com")
+        self.assertEqual(loaded.username, "sender@example.com")
+        self.assertEqual(loaded.password, "secret")
+        self.assertEqual(loaded.from_email, "sender@example.com")
+        self.assertEqual(loaded.source, "saved")
 
 
 if __name__ == "__main__":

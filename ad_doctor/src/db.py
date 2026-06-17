@@ -121,6 +121,20 @@ def run_migrations(connection: sqlite3.Connection) -> None:
     )
     connection.execute(
         """
+        CREATE TABLE IF NOT EXISTS email_settings (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            smtp_host TEXT,
+            smtp_port INTEGER NOT NULL DEFAULT 587,
+            smtp_username TEXT,
+            smtp_password TEXT,
+            smtp_from TEXT,
+            use_tls INTEGER NOT NULL DEFAULT 1,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    connection.execute(
+        """
         CREATE TABLE IF NOT EXISTS automation_run_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             schedule_key TEXT NOT NULL,

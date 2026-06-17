@@ -19,7 +19,7 @@ from src.pipeline_runner import run_real_pipeline
 
 
 DEFAULT_POLL_SECONDS = 60
-DEFAULT_CATCHUP_HOURS = 12
+DEFAULT_CATCHUP_HOURS = 1
 
 
 @dataclass(frozen=True)
@@ -40,7 +40,7 @@ _last_status = AppSchedulerStatus(
 
 
 def is_app_scheduler_enabled() -> bool:
-    value = os.getenv("AD_DOCTOR_APP_SCHEDULER_ENABLED", "0").strip().lower()
+    value = os.getenv("AD_DOCTOR_APP_SCHEDULER_ENABLED", "1").strip().lower()
     return value not in {"0", "false", "no", "off"}
 
 
