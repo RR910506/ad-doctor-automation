@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from contextlib import closing
+from datetime import datetime, timedelta
 import json
 import os
 import re
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import streamlit as st
 
@@ -1194,8 +1196,12 @@ def render_automation_alerts(
                 st.info(
                     "Settings saved. The app scheduler will use these run times while the Streamlit service is running."
                 )
+            settings = saved
+            schedule_times = settings.schedule_times or (settings.schedule_time,)
         except Exception as exc:
             st.error(str(exc))
+
+    render_active_schedule_summary(settings)
 
     st.caption(
         "On Render, the app scheduler checks these times inside the running Streamlit service. "
@@ -1356,6 +1362,59 @@ def build_daily_time_options(
             continue
         options.update(parsed)
     return sorted(options, key=parse_schedule_time)
+
+
+def render_active_schedule_summary(settings) -> None:
+    saved_times = settings.schedule_times or (settings.schedule_time,)
+    status = "Enabled" if settings.enabled else "Disabled"
+    st.markdown("#### Active saved schedule")
+    st.write(f"Status: **{status}**")
+    st.write(f"Saved run times: **{', '.join(saved_times)}**")
+    upcoming_runs = build_upcoming_run_preview(saved_times, settings.timezone, limit=5)
+    if upcoming_runs:
+        st.dataframe(upcoming_runs, width="stretch", hide_index=True)
+    else:
+        st.info("No upcoming run preview is available.")
+
+
+def build_upcoming_run_preview(
+    schedule_times: tuple[str, ...] | list[str],
+    timezone_name: str,
+    *,
+    limit: int = 5,
+) -> list[dict[str, str]]:
+    timezone = load_display_timezone(timezone_name)
+    now = datetime.now(timezone)
+    upcoming = []
+    for days_ahead in range(0, 8):
+        day = now.date() + timedelta(days=days_ahead)
+        for schedule_time in schedule_times:
+            hour, minute = parse_schedule_time(schedule_time)
+            candidate = datetime(
+                day.year,
+                day.month,
+                day.day,
+                hour,
+                minute,
+                tzinfo=timezone,
+            )
+            if candidate <= now:
+                continue
+            upcoming.append(
+                {
+                    "next_trigger": candidate.strftime("%Y-%m-%d %H:%M"),
+                    "run_time": schedule_time,
+                    "timezone": timezone_name,
+                }
+            )
+    return sorted(upcoming, key=lambda row: row["next_trigger"])[:limit]
+
+
+def load_display_timezone(timezone_name: str):
+    try:
+        return ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError:
+        return ZoneInfo("Asia/Kolkata")
 
 
 def build_score_display_rows(topic_scores):
