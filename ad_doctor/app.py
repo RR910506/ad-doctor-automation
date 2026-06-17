@@ -1148,18 +1148,19 @@ def render_automation_alerts(
     with settings_columns[0]:
         enabled = st.checkbox("Auto-run enabled", value=settings.enabled)
     with settings_columns[1]:
-        schedule_values_text = st.text_area(
+        time_options = build_daily_time_options(extra_times=schedule_times)
+        selected_schedule_times = st.multiselect(
             "Daily run times",
-            value="\n".join(schedule_times),
-            height=96,
-            help="Use one time per line, or separate times with commas. Example: 09:00, 13:30, 18:00",
-            placeholder="09:00\n13:30\n18:00",
+            options=time_options,
+            default=list(schedule_times),
+            help="Select one or more times. The automation will trigger once per selected time.",
+            placeholder="Select run times",
         )
         try:
-            parsed_schedule_times = parse_schedule_times(schedule_values_text)
+            parsed_schedule_times = parse_schedule_times(selected_schedule_times)
             st.caption(f"Will run daily at: {', '.join(parsed_schedule_times)}")
         except Exception:
-            st.caption("Enter times like 09:00, 13:30, 18:00")
+            st.caption("Select at least one run time.")
     with settings_columns[2]:
         notify_success = st.checkbox("Mail when done", value=settings.notify_on_success)
     with settings_columns[3]:
@@ -1175,7 +1176,7 @@ def render_automation_alerts(
 
     if st.button("Save automation settings", type="primary"):
         try:
-            normalized_schedule_times = parse_schedule_times(schedule_values_text)
+            normalized_schedule_times = parse_schedule_times(selected_schedule_times)
             saved = save_automation_settings(
                 enabled=enabled,
                 schedule_time=normalized_schedule_times[0],
@@ -1337,6 +1338,24 @@ def parse_schedule_time(value: str) -> tuple[int, int]:
         return int(hour_text), int(minute_text)
     except Exception:
         return 9, 0
+
+
+def build_daily_time_options(
+    *,
+    step_minutes: int = 15,
+    extra_times: tuple[str, ...] | list[str] = (),
+) -> list[str]:
+    options = {
+        f"{minutes // 60:02d}:{minutes % 60:02d}"
+        for minutes in range(0, 24 * 60, step_minutes)
+    }
+    for time_value in extra_times:
+        try:
+            parsed = parse_schedule_times([time_value])
+        except Exception:
+            continue
+        options.update(parsed)
+    return sorted(options, key=parse_schedule_time)
 
 
 def build_score_display_rows(topic_scores):
