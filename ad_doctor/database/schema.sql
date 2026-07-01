@@ -234,6 +234,12 @@ CREATE TABLE IF NOT EXISTS automation_worker_state (
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS system_flags (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_sources_active_status ON sources (active_status);
 CREATE INDEX IF NOT EXISTS idx_articles_source_id ON articles (source_id);
 CREATE INDEX IF NOT EXISTS idx_topic_sources_topic_id ON topic_sources (topic_id);

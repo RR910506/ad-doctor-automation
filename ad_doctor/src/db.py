@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 import threading
 import time
+import os
 from contextlib import closing
 from pathlib import Path
 from typing import Any
@@ -47,6 +48,7 @@ def _initialize_database_once(database_path: Path, schema: str) -> None:
         connection.execute("PRAGMA journal_mode = WAL;")
         connection.executescript(schema)
         run_migrations(connection)
+        clear_generated_data_for_google_store_once(connection)
         connection.commit()
 
 
@@ -214,7 +216,62 @@ def run_migrations(connection: sqlite3.Connection) -> None:
     connection.execute(
         "CREATE INDEX IF NOT EXISTS idx_automation_run_history_status ON automation_run_history (status)"
     )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS system_flags (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
     ensure_automation_settings(connection)
+
+
+def clear_generated_data_for_google_store_once(connection: sqlite3.Connection) -> None:
+    draft_store = os.getenv("AD_DOCTOR_DRAFT_STORE", "sqlite").strip().lower()
+    should_clear = (
+        draft_store == "google"
+        or os.getenv("AD_DOCTOR_CLEAR_SQLITE_GENERATED_DATA_FOR_GOOGLE", "0").strip().lower()
+        in {"1", "true", "yes", "on"}
+    )
+    if not should_clear:
+        return
+
+    flag_key = "google_draft_store_generated_data_reset_v1"
+    existing = connection.execute(
+        "SELECT value FROM system_flags WHERE key = ?",
+        (flag_key,),
+    ).fetchone()
+    if existing:
+        return
+
+    connection.execute("PRAGMA foreign_keys = OFF")
+    for table in (
+        "notification_events",
+        "automation_worker_state",
+        "automation_run_history",
+        "run_logs",
+        "approvals",
+        "content_outputs",
+        "dissection_outputs",
+        "research_dossiers",
+        "locked_topics",
+        "topic_scores",
+        "topic_sources",
+        "topics",
+        "articles",
+    ):
+        connection.execute(f"DELETE FROM {table}")
+        connection.execute("DELETE FROM sqlite_sequence WHERE name = ?", (table,))
+    connection.execute("PRAGMA foreign_keys = ON")
+    connection.execute(
+        """
+        INSERT INTO system_flags (key, value, updated_at)
+        VALUES (?, 'complete', CURRENT_TIMESTAMP)
+        """,
+        (flag_key,),
+    )
 
 
 def ensure_automation_settings(connection: sqlite3.Connection) -> None:
