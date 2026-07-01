@@ -7,6 +7,7 @@ import json
 import traceback
 
 from src.automation_engine import get_automation_settings
+from src.app_scheduler import claim_latest_due_run, run_claimed_schedule
 from src.config import DATABASE_PATH
 from src.db import get_connection, initialize_database, log_run_event
 from src.notification_engine import notify_daily_scrape_complete
@@ -27,57 +28,34 @@ def main() -> int:
         print(json.dumps({"run_id": run_id, "status": "skipped", "reason": "disabled"}))
         return 0
 
-    try:
-        summary = run_real_pipeline(
-            database_path=DATABASE_PATH,
-            fetch_source_time_budget_seconds=settings.fetch_source_time_budget_seconds,
-        )
-        notification_summary = (
-            notify_daily_scrape_complete(summary, database_path=DATABASE_PATH)
-            if settings.notify_on_success
-            else None
-        )
-        log_daily_event(
-            summary.run_id,
-            "complete",
-            (
-                f"Daily automation complete: {summary.qualified_topics} qualified, "
-                f"{summary.locked_topics} locked."
-            ),
-            {
-                "summary": summary.__dict__,
-                "notification_summary": notification_summary.__dict__
-                if notification_summary
-                else None,
-            },
-        )
-        print(json.dumps(build_output(summary, notification_summary), indent=2))
-        return 0
-    except Exception as exc:
-        error_text = "".join(traceback.format_exception_only(type(exc), exc)).strip()
-        failed_summary = FailedPipelineSummary(run_id=run_id)
-        notification_summary = (
-            notify_daily_scrape_complete(
-                failed_summary,
-                database_path=DATABASE_PATH,
-                error_message=error_text,
-            )
-            if settings.notify_on_failure
-            else None
-        )
+    claimed = claim_latest_due_run(settings, database_path=DATABASE_PATH)
+    if not claimed:
         log_daily_event(
             run_id,
-            "error",
-            f"Daily automation failed: {error_text}",
-            {
-                "traceback": traceback.format_exc(),
-                "notification_summary": notification_summary.__dict__
-                if notification_summary
-                else None,
-            },
+            "skipped",
+            "No unclaimed scheduled time is due. Another scheduler may already own this run.",
         )
-        print(json.dumps({"run_id": run_id, "status": "error", "error": error_text}, indent=2))
-        return 1
+        print(json.dumps({"run_id": run_id, "status": "skipped", "reason": "no_due_slot"}))
+        return 0
+
+    schedule_key, schedule_time = claimed
+    success = run_claimed_schedule(
+        schedule_key=schedule_key,
+        schedule_time=schedule_time,
+        settings=settings,
+        database_path=DATABASE_PATH,
+    )
+    print(
+        json.dumps(
+            {
+                "schedule_key": schedule_key,
+                "scheduled_time": schedule_time,
+                "status": "complete" if success else "error",
+            },
+            indent=2,
+        )
+    )
+    return 0 if success else 1
 
 
 def build_output(summary: PipelineSummary, notification_summary) -> dict[str, object]:

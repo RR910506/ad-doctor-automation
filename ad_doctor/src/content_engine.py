@@ -15,6 +15,11 @@ from src.db import (
     list_research_dossiers,
     log_run_event,
 )
+from src.settings_engine import (
+    load_content_framework_settings,
+    parse_carousel_structure,
+    parse_json_list,
+)
 from src.topic_matcher import is_same_news_event, topic_similarity
 
 
@@ -94,6 +99,7 @@ def generate_content_outputs(
     social_template_path = TEMPLATE_DIR / "social_post_template.md"
     blog_template = read_template(blog_template_path)
     social_template = read_template(social_template_path)
+    framework_settings = load_content_framework_settings(database_path=database_path)
     blog_count = 0
     social_count = 0
 
@@ -116,7 +122,12 @@ def generate_content_outputs(
         for dissection in dissections:
             locked_topic_id = int(dissection["locked_topic_id"])
             dossier = dossiers_by_locked_topic_id.get(locked_topic_id, {})
-            social_draft = build_social_draft(dossier, dissection["output_markdown"], social_template)
+            social_draft = build_social_draft(
+                dossier,
+                dissection["output_markdown"],
+                social_template,
+                framework_settings=framework_settings,
+            )
             if is_rejected_social_draft(social_draft):
                 insert_content_output(
                     connection,
@@ -213,7 +224,12 @@ What marketers can learn: watch how the campaign connects cultural context, crea
 """
 
 
-def build_social_draft(dossier: dict[str, object], dissection_markdown: str, template_text: str) -> str:
+def build_social_draft(
+    dossier: dict[str, object],
+    dissection_markdown: str,
+    template_text: str,
+    framework_settings: dict[str, str] | None = None,
+) -> str:
     _ = template_text
     topic = str(dossier.get("topic") or "Untitled campaign topic")
     reference_articles = select_topic_reference_articles(dossier)
@@ -232,7 +248,10 @@ def build_social_draft(dossier: dict[str, object], dissection_markdown: str, tem
         )
 
     evidence_text = build_evidence_text(dossier, dissection_markdown, reference_articles)
-    pillar = infer_content_pillar(str(topic), dossier, evidence_text)
+    pillar = enforce_framework_pillar(
+        infer_content_pillar(str(topic), dossier, evidence_text),
+        framework_settings,
+    )
     core_insight = build_core_insight(dossier, evidence_text, pillar)
     strategic_insight = build_core_strategic_insight(dossier, core_insight)
     psychology_analysis = build_signal_analysis(
@@ -268,8 +287,14 @@ def build_social_draft(dossier: dict[str, object], dissection_markdown: str, tem
         marketing_analysis=marketing_analysis,
         doctor_verdict=doctor_verdict,
         prescription=prescription,
+        framework_settings=framework_settings,
     )
-    caption = build_caption(topic=str(topic), core_insight=strategic_insight, prescription=prescription)
+    caption = build_caption(
+        topic=str(topic),
+        core_insight=strategic_insight,
+        prescription=prescription,
+        framework_settings=framework_settings,
+    )
 
     return "\n\n".join(
         [
@@ -280,12 +305,13 @@ def build_social_draft(dossier: dict[str, object], dissection_markdown: str, tem
             "Perplexity Research Summary:\n" + build_perplexity_research_summary(dossier),
             "Core Strategic Insight:\n" + strategic_insight,
             "Selected Content Pillar: " + pillar,
+            "Framework Used: " + get_framework_name(framework_settings),
             "Carousel Draft:",
             carousel,
             "Caption:\n" + caption,
             "Hashtags:\n" + build_hashtags(pillar, evidence_text),
-            "Designer Notes:\n" + build_designer_notes(pillar, topic, reference_articles),
-            "Fact-check Notes:\n" + build_fact_check_notes(reference_articles, dossier),
+            "Designer Notes:\n" + build_designer_notes(pillar, topic, reference_articles, framework_settings),
+            "Fact-check Notes:\n" + build_fact_check_notes(reference_articles, dossier, framework_settings),
             "Risk Notes:\n" + build_risk_notes(dossier),
             "Source References:\n\n" + references,
         ]
@@ -487,7 +513,11 @@ def format_verified_data_points(points: list[dict[str, str]]) -> str:
     return "; ".join(f"{point['claim']} (Source: {point['source']})" for point in points[:3])
 
 
-def build_fact_check_notes(reference_articles: list[dict[str, object]], dossier: dict[str, object]) -> str:
+def build_fact_check_notes(
+    reference_articles: list[dict[str, object]],
+    dossier: dict[str, object],
+    framework_settings: dict[str, str] | None = None,
+) -> str:
     data_points = get_verified_data_points(dossier)
     lines = [
         f"Qualification uses only exact-topic references from {format_source_names([str(article.get('source_name') or '') for article in reference_articles])}.",
@@ -496,6 +526,9 @@ def build_fact_check_notes(reference_articles: list[dict[str, object]], dossier:
         "Article facts are sourced; Ad Doctor diagnosis is interpretation based on those facts.",
         "No fake quotes are allowed.",
     ]
+    framework_rules = get_framework_text(framework_settings, "fact_check_rules", "")
+    if framework_rules:
+        lines.append(f"Framework rule: {framework_rules}")
     return "\n".join(lines)
 
 
@@ -543,6 +576,60 @@ def format_source_names(source_names: list[object]) -> str:
     if len(unique_names) <= 6:
         return ", ".join(unique_names)
     return f"{', '.join(unique_names[:6])}, and {len(unique_names) - 6} more"
+
+
+def get_framework_name(framework_settings: dict[str, str] | None) -> str:
+    if not framework_settings:
+        return "The Ad Doctor Diagnostic Carousel"
+    return str(framework_settings.get("framework_name") or "The Ad Doctor Diagnostic Carousel")
+
+
+def get_framework_pillars(framework_settings: dict[str, str] | None) -> list[str]:
+    if not framework_settings:
+        return list(AD_DOCTOR_PILLARS)
+    return parse_json_list(
+        str(framework_settings.get("content_pillars") or ""),
+        fallback=list(AD_DOCTOR_PILLARS),
+    )
+
+
+def enforce_framework_pillar(pillar: str, framework_settings: dict[str, str] | None) -> str:
+    allowed_pillars = get_framework_pillars(framework_settings)
+    if pillar in allowed_pillars:
+        return pillar
+    if "Campaign Surgery" in allowed_pillars:
+        return "Campaign Surgery"
+    return allowed_pillars[0] if allowed_pillars else "Campaign Surgery"
+
+
+def get_framework_slide_roles(framework_settings: dict[str, str] | None) -> list[dict[str, object]]:
+    if not framework_settings:
+        return []
+    return parse_carousel_structure(str(framework_settings.get("carousel_structure") or ""))
+
+
+def get_framework_text(
+    framework_settings: dict[str, str] | None,
+    key: str,
+    fallback: str,
+) -> str:
+    if not framework_settings:
+        return fallback
+    text = normalize_whitespace(str(framework_settings.get(key) or ""))
+    return text or fallback
+
+
+def extract_framework_cta(framework_settings: dict[str, str] | None) -> str:
+    default_cta = "Follow @the_ad_doctor for more marketing breakdowns."
+    caption_rules = get_framework_text(framework_settings, "caption_rules", "")
+    if not caption_rules:
+        return default_cta
+    match = re.search(r"End with:\s*[\"']?([^\"'\n]+)", caption_rules, flags=re.IGNORECASE)
+    if match:
+        return normalize_whitespace(match.group(1)).rstrip(".") + "."
+    if "follow @the_ad_doctor" in caption_rules.lower():
+        return default_cta
+    return default_cta
 
 
 def select_topic_reference_articles(dossier: dict[str, object]) -> list[dict[str, object]]:
@@ -1067,6 +1154,7 @@ def build_carousel(
     marketing_analysis: str,
     doctor_verdict: str,
     prescription: str,
+    framework_settings: dict[str, str] | None = None,
 ) -> str:
     source_cue = build_source_cue(reference_articles)
     event_copy = build_verified_event_copy(topic, reference_articles)
@@ -1193,7 +1281,15 @@ def build_carousel(
             "data_used": False,
         },
     ]
-    for slide in slides:
+    framework_roles = get_framework_slide_roles(framework_settings)
+    for index, slide in enumerate(slides):
+        if index < len(framework_roles):
+            role = str(framework_roles[index].get("role") or "").strip()
+            purpose = str(framework_roles[index].get("purpose") or "").strip()
+            if role:
+                slide["role"] = role
+            if purpose:
+                slide["framework_purpose"] = purpose
         slide["visual_suggestion"] = build_visual_suggestion(
             topic=topic,
             slide_role=str(slide["role"]),
@@ -1250,14 +1346,20 @@ def build_media_diagnosis(dossier: dict[str, object]) -> str:
     )
 
 
-def build_caption(topic: str, core_insight: str, prescription: str) -> str:
+def build_caption(
+    topic: str,
+    core_insight: str,
+    prescription: str,
+    framework_settings: dict[str, str] | None = None,
+) -> str:
+    cta = extract_framework_cta(framework_settings)
     return (
         f"{topic} is not just another industry update.\n\n"
         f"{summarize_claim(core_insight, 240)}\n"
         "The important question is not only what happened.\n"
         "It is what this reveals about brands, people, platforms, culture, and market pressure.\n"
         f"{summarize_claim(prescription, 220)}\n\n"
-        "Follow @the_ad_doctor for more marketing breakdowns."
+        f"{cta}"
     )
 
 
@@ -1306,16 +1408,24 @@ def build_designer_notes(
     pillar: str,
     topic: str | None = None,
     reference_articles: list[dict[str, object]] | None = None,
+    framework_settings: dict[str, str] | None = None,
 ) -> str:
     topic_text = f" for {topic}" if topic else ""
     source_note = ""
     if reference_articles is not None:
         source_names = [str(article.get("source_name") or "") for article in reference_articles]
         source_note = f" Use exact-topic source visuals from {format_source_names(source_names)}."
+    designer_rule = get_framework_text(
+        framework_settings,
+        "designer_rules",
+        (
+            "Each slide needs one dominant headline, one short body, one proof visual, and one source cue. "
+            "Follow the Ad Doctor reference style: bold headline, compact narrative, image proof, source line, yellow footer cue."
+        ),
+    )
     return (
         f"Design this as a {pillar} diagnosis{topic_text}, not as a news carousel. "
-        "Each slide needs one dominant headline, one short body, one proof visual, and one source cue. "
-        "Follow the Ad Doctor reference style: bold headline, compact narrative, image proof, source line, yellow footer cue. "
+        f"{designer_rule} "
         "Prioritize the slide hierarchy over decoration."
         + source_note
     )

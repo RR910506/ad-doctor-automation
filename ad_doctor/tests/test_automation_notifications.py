@@ -20,8 +20,17 @@ from src.automation_engine import (
     save_automation_settings,
     validate_schedule_time,
 )
-from src.app_scheduler import claim_scheduled_run, list_automation_run_history
-from src.app_scheduler import is_app_scheduler_enabled
+from src.app_scheduler import (
+    claim_latest_due_run,
+    claim_next_queued_run,
+    claim_scheduled_run,
+    get_cloud_worker_status,
+    is_app_scheduler_enabled,
+    list_automation_run_history,
+    queue_due_runs,
+    record_worker_heartbeat,
+    requeue_interrupted_worker_runs,
+)
 from src.db import get_connection, initialize_database
 from src.notification_engine import (
     load_smtp_settings,
@@ -119,6 +128,7 @@ class AutomationSettingsTest(unittest.TestCase):
         self.assertEqual(task_command, f'cmd.exe /c ""{script_path}""')
         settings_args = run_mock.call_args_list[2].args[0]
         self.assertIn("-StartWhenAvailable", settings_args[-1])
+        self.assertIn("-WakeToRun", settings_args[-1])
         self.assertIn("-AllowStartIfOnBatteries", settings_args[-1])
 
 
@@ -224,6 +234,148 @@ class AppSchedulerTest(unittest.TestCase):
         self.assertIsNone(second_claim)
         self.assertEqual(len(history), 1)
         self.assertEqual(history[0]["status"], "running")
+
+    def test_external_runner_claims_only_latest_due_slot(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            database_path = Path(temporary_directory) / "ad_doctor.db"
+            settings = save_automation_settings(
+                enabled=True,
+                schedule_time="09:00",
+                schedule_times=("09:00", "13:30", "18:00"),
+                database_path=database_path,
+            )
+
+            claimed = claim_latest_due_run(
+                settings,
+                now=datetime(2026, 6, 15, 14, 0),
+                database_path=database_path,
+            )
+            duplicate = claim_latest_due_run(
+                settings,
+                now=datetime(2026, 6, 15, 14, 1),
+                database_path=database_path,
+            )
+
+        self.assertEqual(claimed, ("2026-06-15T13:30@Asia/Kolkata", "13:30"))
+        self.assertIsNone(duplicate)
+
+    def test_cloud_worker_queues_every_due_timestamp_independently(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            database_path = Path(temporary_directory) / "ad_doctor.db"
+            save_automation_settings(
+                enabled=True,
+                schedule_time="09:00",
+                schedule_times=("09:00", "10:00", "11:00"),
+                database_path=database_path,
+            )
+
+            queued = queue_due_runs(
+                now=datetime(2026, 6, 15, 11, 30),
+                database_path=database_path,
+            )
+            duplicate_queue = queue_due_runs(
+                now=datetime(2026, 6, 15, 11, 31),
+                database_path=database_path,
+            )
+            first_claim = claim_next_queued_run(database_path)
+            blocked_while_running = claim_next_queued_run(database_path)
+            with closing(get_connection(database_path)) as connection:
+                connection.execute(
+                    "UPDATE automation_run_history SET status='complete' WHERE schedule_key=?",
+                    (first_claim[0],),
+                )
+                connection.commit()
+            second_claim = claim_next_queued_run(database_path)
+
+        self.assertEqual(len(queued), 3)
+        self.assertEqual(duplicate_queue, [])
+        self.assertEqual(first_claim[1], "09:00")
+        self.assertIsNone(blocked_while_running)
+        self.assertEqual(second_claim[1], "10:00")
+
+    def test_worker_restart_returns_running_timestamp_to_queue(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            database_path = Path(temporary_directory) / "ad_doctor.db"
+            save_automation_settings(
+                enabled=True,
+                schedule_time="09:00",
+                database_path=database_path,
+            )
+            queue_due_runs(
+                now=datetime(2026, 6, 15, 9, 5),
+                database_path=database_path,
+            )
+            claim_next_queued_run(database_path)
+
+            recovered = requeue_interrupted_worker_runs(database_path)
+            history = list_automation_run_history(database_path=database_path)
+
+        self.assertEqual(recovered, 1)
+        self.assertEqual(history[0]["status"], "queued")
+
+    def test_cloud_worker_catches_yesterdays_slot_before_todays_time(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            database_path = Path(temporary_directory) / "ad_doctor.db"
+            save_automation_settings(
+                enabled=True,
+                schedule_time="09:00",
+                database_path=database_path,
+            )
+
+            queued = queue_due_runs(
+                now=datetime(2026, 6, 16, 8, 0),
+                database_path=database_path,
+            )
+
+        self.assertEqual(queued, ["2026-06-15T09:00@Asia/Kolkata"])
+
+    def test_cloud_worker_heartbeat_is_visible_to_the_web_app(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            database_path = Path(temporary_directory) / "ad_doctor.db"
+            initialize_database(
+                database_path=database_path,
+                schema_path=PROJECT_DIR / "database" / "schema.sql",
+            )
+            record_worker_heartbeat(
+                "idle",
+                "Waiting for the next timestamp.",
+                worker_id="test-worker",
+                database_path=database_path,
+            )
+
+            status = get_cloud_worker_status(database_path)
+
+        self.assertTrue(status.running)
+        self.assertIn("Waiting", status.message)
+
+    def test_stale_running_history_is_marked_interrupted(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            database_path = Path(temporary_directory) / "ad_doctor.db"
+            initialize_database(
+                database_path=database_path,
+                schema_path=PROJECT_DIR / "database" / "schema.sql",
+            )
+            claim_scheduled_run(
+                scheduled_at=datetime(2026, 6, 15, 9, 0),
+                schedule_time="09:00",
+                timezone_name="Asia/Kolkata",
+                database_path=database_path,
+            )
+            with closing(get_connection(database_path)) as connection:
+                connection.execute(
+                    "UPDATE automation_run_history SET started_at = '2020-01-01 00:00:00'"
+                )
+                connection.commit()
+
+            history = list_automation_run_history(database_path=database_path)
+            with closing(get_connection(database_path)) as connection:
+                stored_status = connection.execute(
+                    "SELECT status FROM automation_run_history LIMIT 1"
+                ).fetchone()["status"]
+
+        self.assertEqual(history[0]["status"], "error")
+        self.assertIn("interrupted", history[0]["error_message"].lower())
+        self.assertEqual(stored_status, "running")
 
 
 class SmtpSettingsTest(unittest.TestCase):

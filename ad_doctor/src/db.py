@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 import time
 from contextlib import closing
 from pathlib import Path
@@ -9,16 +10,16 @@ from typing import Any
 from src.config import DATABASE_PATH, SCHEMA_PATH
 
 
+_INITIALIZATION_LOCK = threading.Lock()
+_INITIALIZED_DATABASES: set[tuple[str, int]] = set()
+
+
 def get_connection(database_path: Path = DATABASE_PATH) -> sqlite3.Connection:
     connection = sqlite3.connect(database_path, timeout=60)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA busy_timeout = 60000;")
     connection.execute("PRAGMA foreign_keys = ON;")
-    try:
-        connection.execute("PRAGMA journal_mode = WAL;")
-        connection.execute("PRAGMA synchronous = NORMAL;")
-    except sqlite3.OperationalError:
-        pass
+    connection.execute("PRAGMA synchronous = NORMAL;")
     return connection
 
 
@@ -26,13 +27,24 @@ def initialize_database(
     database_path: Path = DATABASE_PATH,
     schema_path: Path = SCHEMA_PATH,
 ) -> None:
+    database_path = Path(database_path)
+    schema_path = Path(schema_path)
+    initialization_key = (str(database_path.resolve()), schema_path.stat().st_mtime_ns)
+    if initialization_key in _INITIALIZED_DATABASES:
+        return
+
     schema = schema_path.read_text(encoding="utf-8")
     database_path.parent.mkdir(parents=True, exist_ok=True)
-    retry_locked_database(lambda: _initialize_database_once(database_path, schema))
+    with _INITIALIZATION_LOCK:
+        if initialization_key in _INITIALIZED_DATABASES:
+            return
+        retry_locked_database(lambda: _initialize_database_once(database_path, schema))
+        _INITIALIZED_DATABASES.add(initialization_key)
 
 
 def _initialize_database_once(database_path: Path, schema: str) -> None:
     with closing(get_connection(database_path)) as connection:
+        connection.execute("PRAGMA journal_mode = WAL;")
         connection.executescript(schema)
         run_migrations(connection)
         connection.commit()
@@ -135,6 +147,38 @@ def run_migrations(connection: sqlite3.Connection) -> None:
     )
     connection.execute(
         """
+        CREATE TABLE IF NOT EXISTS research_provider_settings (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            provider_key TEXT NOT NULL DEFAULT 'perplexity',
+            api_key TEXT,
+            model TEXT NOT NULL DEFAULT 'sonar-pro',
+            endpoint TEXT NOT NULL DEFAULT 'https://api.perplexity.ai/v1/sonar',
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS content_framework_settings (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            framework_name TEXT NOT NULL DEFAULT 'The Ad Doctor Diagnostic Carousel',
+            brand_worldview TEXT NOT NULL,
+            qualification_rule TEXT NOT NULL,
+            content_pillars TEXT NOT NULL,
+            carousel_structure TEXT NOT NULL,
+            tone_rules TEXT NOT NULL,
+            psychology_lenses TEXT NOT NULL,
+            consumer_lenses TEXT NOT NULL,
+            culture_lenses TEXT NOT NULL,
+            caption_rules TEXT NOT NULL,
+            fact_check_rules TEXT NOT NULL,
+            designer_rules TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    connection.execute(
+        """
         CREATE TABLE IF NOT EXISTS automation_run_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             schedule_key TEXT NOT NULL,
@@ -149,6 +193,18 @@ def run_migrations(connection: sqlite3.Connection) -> None:
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             UNIQUE (schedule_key)
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS automation_worker_state (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            status TEXT NOT NULL DEFAULT 'starting',
+            message TEXT,
+            worker_id TEXT,
+            last_heartbeat_at TEXT,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
         """
     )

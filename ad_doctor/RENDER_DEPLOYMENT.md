@@ -1,67 +1,82 @@
-# Render Deployment Guide
+# Render Free Deployment Guide
 
-This project is a Streamlit app. The app entry point is `app.py`, and the Render start command is:
+This project supports a no-paid-Render setup:
+
+- Render Free hosts the Streamlit review UI.
+- GitHub Actions runs the daily automation on a schedule.
+- The GitHub Action commits the updated SQLite database back to `main`.
+- Render redeploys from `main`, so the UI shows the latest generated drafts.
+
+This design is required because Render Free web services sleep after idle time and cannot attach persistent disks.
+
+## Current Free Architecture
+
+- Render service type: Web Service.
+- Render instance type: Free.
+- Render root directory: `ad_doctor`.
+- Render start command:
 
 ```bash
 streamlit run app.py --server.address 0.0.0.0 --server.port $PORT --server.headless true --browser.gatherUsageStats false
 ```
 
-## Current Deployment Shape
-
-- Framework: Streamlit.
-- Service type: Render Web Service.
-- Runtime: Python.
-- Service root directory: `ad_doctor`.
-- Database today: SQLite through `src/db.py`.
-- SQLite storage on Render: persistent disk mounted at `/opt/render/project/src/ad_doctor_data`.
-- Database file path on Render: `/opt/render/project/src/ad_doctor_data/ad_doctor.db`.
-- Health check path: `/_stcore/health`.
+- Daily runner: `.github/workflows/daily-ad-doctor.yml`.
+- Database path: `ad_doctor/database/ad_doctor.db`.
+- Scheduler mode: `external`.
 
 ## Required Render Environment Variables
 
-Set these in Render. Do not store real values in code.
+Set these in Render:
 
 ```text
-AD_DOCTOR_DATABASE_PATH=/opt/render/project/src/ad_doctor_data/ad_doctor.db
-AD_DOCTOR_APP_SCHEDULER_ENABLED=1
-AD_DOCTOR_SCHEDULER_POLL_SECONDS=60
-AD_DOCTOR_SCHEDULER_CATCHUP_HOURS=12
-PERPLEXITY_API_KEY=your_key_here
+AD_DOCTOR_DATABASE_PATH=database/ad_doctor.db
+AD_DOCTOR_APP_SCHEDULER_ENABLED=0
+AD_DOCTOR_SCHEDULER_MODE=external
 PERPLEXITY_MODEL=sonar-pro
 PERPLEXITY_ENDPOINT=https://api.perplexity.ai/v1/sonar
-OPENROUTER_API_KEY=your_key_here_if_used
-AD_DOCTOR_SMTP_HOST=your_smtp_host_if_email_is_enabled
-AD_DOCTOR_SMTP_PORT=587
-AD_DOCTOR_SMTP_USERNAME=your_smtp_username_if_email_is_enabled
-AD_DOCTOR_SMTP_PASSWORD=your_smtp_password_if_email_is_enabled
-AD_DOCTOR_SMTP_FROM=your_sender_email_if_email_is_enabled
-AD_DOCTOR_SMTP_USE_TLS=1
 ```
 
-## PostgreSQL Decision
+Optional in Render:
 
-PostgreSQL is not required for the first Render web deployment because the code currently uses SQLite directly.
+```text
+PERPLEXITY_API_KEY=your_key_here
+OPENROUTER_API_KEY=your_key_here_if_used
+```
 
-Use PostgreSQL later if you need:
+The daily GitHub Action needs the same provider secrets to generate higher-quality research-backed drafts.
 
-- Multiple app instances.
-- Stronger concurrency during long scraping runs.
-- Managed backups and production-grade database operations.
-- Separate Render Cron Jobs that write to the same production data store.
+## Required GitHub Secrets
 
-Important: the current code does not use `DATABASE_URL`. Adding `DATABASE_URL` should be part of a deliberate PostgreSQL migration, not a small environment-only change.
+In GitHub, open the repository settings and add:
 
-## Daily Automation Note
+```text
+PERPLEXITY_API_KEY
+OPENROUTER_API_KEY
+```
 
-The Streamlit web service now includes an app-level scheduler. It reads the run times saved in the UI and records each scheduled slot in SQLite before running, so a single slot does not trigger twice.
+Optional:
 
-For the current SQLite deployment, use this app scheduler instead of a separate Render Cron Job:
+```text
+RENDER_DEPLOY_HOOK_URL
+```
 
-- Set `AD_DOCTOR_APP_SCHEDULER_ENABLED=1`.
-- Keep the web service running on a paid Render plan.
-- Save one or more run times from `Schedule & Keys` in the app UI.
+If `RENDER_DEPLOY_HOOK_URL` is set, the daily workflow triggers Render after committing new database changes. If it is not set, Render must have auto-deploy enabled for the `main` branch.
 
-Render Cron Jobs are still a good later option after migrating to PostgreSQL. Cron jobs cannot use the web service persistent disk, so SQLite is not the right storage if a separate cron job must update the same production data.
+## GitHub Actions Schedule
+
+The workflow runs daily at:
+
+```text
+03:45 UTC = 09:15 Asia/Kolkata
+```
+
+The app default schedule is `09:00 Asia/Kolkata`, so this gives the scheduled slot time to become due before the workflow claims it.
+
+You can also run it manually from GitHub:
+
+```text
+Actions -> Daily Ad Doctor Automation -> Run workflow
+```
 
 ## Non-Developer Render Steps
 
@@ -71,12 +86,11 @@ Render Cron Jobs are still a good later option after migrating to PostgreSQL. Cr
 4. Connect the GitHub repository `RR910506/ad-doctor-automation`.
 5. Select branch `main`.
 6. Render should detect `render.yaml` at the repository root.
-7. Review the service named `ad-doctor`.
-8. Add the secret values Render asks for, especially `PERPLEXITY_API_KEY`.
-9. Keep `AD_DOCTOR_DATABASE_PATH` as `/opt/render/project/src/ad_doctor_data/ad_doctor.db`.
-10. Deploy the Blueprint only when you are ready.
-11. After deploy, open the service URL.
-12. If the health check fails, change the Health Check Path to `/` or disable HTTP health checks and use Render's default TCP check.
+7. Confirm the service named `ad-doctor`.
+8. Choose the Free instance type if Render asks.
+9. Add the environment variables listed above.
+10. Deploy the Blueprint.
+11. Make sure auto-deploy from `main` is enabled, or add a deploy hook URL to GitHub as `RENDER_DEPLOY_HOOK_URL`.
 
 ## Manual Web Service Settings
 
@@ -87,11 +101,29 @@ Repository: RR910506/ad-doctor-automation
 Branch: main
 Root Directory: ad_doctor
 Runtime: Python
+Instance Type: Free
 Build Command: pip install --upgrade pip && pip install -r requirements.txt
 Start Command: streamlit run app.py --server.address 0.0.0.0 --server.port $PORT --server.headless true --browser.gatherUsageStats false
 Health Check Path: /_stcore/health
-Persistent Disk Mount Path: /opt/render/project/src/ad_doctor_data
-Persistent Disk Size: 5 GB
 ```
 
-Do not add real API keys to GitHub.
+## Important Free-Plan Limits
+
+- Render Free services sleep after idle time.
+- Render Free services cannot use persistent disks.
+- UI changes made while the app is running can be lost after sleep or redeploy because the database is repo-backed.
+- Daily generated drafts are persisted because GitHub Actions commits the updated database to GitHub.
+- Some source sites may block datacenter traffic with `403 Forbidden`; those sources will be logged as failures while other sources continue.
+- Render Free blocks outbound SMTP ports such as `587`, so email alerts should not be treated as reliable on Free Render.
+
+## Paid Upgrade Path
+
+If you later move to a paid Render plan, use the older always-on worker design:
+
+- Set `plan: starter`.
+- Add a persistent disk at `/opt/render/project/src/ad_doctor_data`.
+- Set `AD_DOCTOR_DATABASE_PATH=/opt/render/project/src/ad_doctor_data/ad_doctor.db`.
+- Set `AD_DOCTOR_SCHEDULER_MODE=worker`.
+- Use `startCommand: python start_render.py`.
+
+That paid setup allows approvals and generated data to persist directly on Render without GitHub Actions committing the database.

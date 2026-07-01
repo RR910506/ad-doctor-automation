@@ -183,6 +183,32 @@ CREATE TABLE IF NOT EXISTS email_settings (
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS research_provider_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    provider_key TEXT NOT NULL DEFAULT 'perplexity',
+    api_key TEXT,
+    model TEXT NOT NULL DEFAULT 'sonar-pro',
+    endpoint TEXT NOT NULL DEFAULT 'https://api.perplexity.ai/v1/sonar',
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS content_framework_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    framework_name TEXT NOT NULL DEFAULT 'The Ad Doctor Diagnostic Carousel',
+    brand_worldview TEXT NOT NULL,
+    qualification_rule TEXT NOT NULL,
+    content_pillars TEXT NOT NULL,
+    carousel_structure TEXT NOT NULL,
+    tone_rules TEXT NOT NULL,
+    psychology_lenses TEXT NOT NULL,
+    consumer_lenses TEXT NOT NULL,
+    culture_lenses TEXT NOT NULL,
+    caption_rules TEXT NOT NULL,
+    fact_check_rules TEXT NOT NULL,
+    designer_rules TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS automation_run_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     schedule_key TEXT NOT NULL,
@@ -197,6 +223,15 @@ CREATE TABLE IF NOT EXISTS automation_run_history (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (schedule_key)
+);
+
+CREATE TABLE IF NOT EXISTS automation_worker_state (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    status TEXT NOT NULL DEFAULT 'starting',
+    message TEXT,
+    worker_id TEXT,
+    last_heartbeat_at TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_sources_active_status ON sources (active_status);

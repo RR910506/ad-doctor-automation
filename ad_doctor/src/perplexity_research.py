@@ -8,6 +8,7 @@ import requests
 
 from src.config import PERPLEXITY_API_KEY, PERPLEXITY_ENDPOINT, PERPLEXITY_MODEL
 
+ACTIVE_RESEARCH_PROVIDER = "perplexity"
 
 RESEARCH_KEYS = (
     "summary",
@@ -29,6 +30,8 @@ def research_topic_with_perplexity(
     source_articles: list[dict[str, object]],
 ) -> dict[str, Any]:
     source_articles = prepare_source_articles(source_articles)
+    if ACTIVE_RESEARCH_PROVIDER != "perplexity":
+        return build_provider_not_live_research(topic, source_articles, ACTIVE_RESEARCH_PROVIDER)
     if not PERPLEXITY_API_KEY:
         return build_unavailable_research(topic, source_articles)
 
@@ -225,6 +228,28 @@ def build_unavailable_research(topic: str, source_articles: list[dict[str, objec
         summary=summary,
         source_links=source_links,
     )
+
+
+def build_provider_not_live_research(
+    topic: str,
+    source_articles: list[dict[str, object]],
+    provider_key: str,
+) -> dict[str, Any]:
+    source_names = sorted({str(article.get("source_name") or "Approved source") for article in source_articles})
+    source_links = [str(article["article_url"]) for article in source_articles if article.get("article_url")]
+    summary = (
+        f"Selected research provider '{provider_key}' is saved, but the live deep-research adapter is not active yet. "
+        "Using local exact-topic approved-source synthesis only. "
+        f"Evidence base: {len(source_names)} approved source(s): {', '.join(source_names) if source_names else 'none'}."
+    )
+    payload = fallback_research_payload(
+        topic=topic,
+        status="provider_not_live",
+        summary=summary,
+        source_links=source_links,
+    )
+    payload["provider"] = provider_key
+    return payload
 
 
 def build_error_research(

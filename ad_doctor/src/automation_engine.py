@@ -266,6 +266,7 @@ def apply_windows_task_settings(task_name: str) -> subprocess.CompletedProcess[s
     command = (
         "$settings = New-ScheduledTaskSettingsSet "
         "-StartWhenAvailable "
+        "-WakeToRun "
         "-AllowStartIfOnBatteries "
         "-DontStopIfGoingOnBatteries "
         "-ExecutionTimeLimit (New-TimeSpan -Hours 8); "

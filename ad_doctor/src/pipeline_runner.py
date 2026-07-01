@@ -9,7 +9,7 @@ from src.article_fetcher import fetch_articles
 from src.config import DATABASE_PATH
 from src.coverage_backfill import backfill_near_qualified_topic_coverage, expand_topic_coverage_from_stored_articles
 from src.content_engine import generate_content_outputs
-from src.db import clear_derived_pipeline_data, delete_demo_articles, get_connection, initialize_database, log_run_event
+from src.db import get_connection, initialize_database, log_run_event
 from src.dissection_engine import run_campaign_dissections
 from src.prioritization_engine import prioritize_topics
 from src.qualification_engine import qualify_topics
@@ -36,14 +36,75 @@ class PipelineSummary:
     social_drafts: int
 
 
+@dataclass(frozen=True)
+class ContentRecoverySummary:
+    run_id: str
+    qualified_topics: int
+    locked_topics: int
+    research_dossiers: int
+    dissections: int
+    blog_drafts: int
+    social_drafts: int
+
+
+def generate_content_from_qualified_topics(
+    database_path=DATABASE_PATH,
+    run_id: str | None = None,
+) -> ContentRecoverySummary:
+    initialize_database(database_path=database_path)
+    run_id = run_id or datetime.now(UTC).strftime("recovery_%Y%m%d_%H%M%S")
+    with closing(get_connection(database_path)) as connection:
+        qualified_topics = int(
+            connection.execute(
+                "SELECT COUNT(*) FROM topics WHERE status = 'qualified'"
+            ).fetchone()[0]
+        )
+    if qualified_topics == 0:
+        raise ValueError("No qualified topics are available for content generation.")
+
+    prioritize_topics(database_path=database_path, run_id=run_id, limit=qualified_topics)
+    lock_summary = lock_top_topics(
+        database_path=database_path,
+        run_id=run_id,
+        limit=qualified_topics,
+    )
+    research_summary = build_research_dossiers(database_path=database_path, run_id=run_id)
+    dissection_summary = run_campaign_dissections(database_path=database_path, run_id=run_id)
+    content_summary = generate_content_outputs(database_path=database_path, run_id=run_id)
+    summary = ContentRecoverySummary(
+        run_id=run_id,
+        qualified_topics=qualified_topics,
+        locked_topics=lock_summary.locked_count,
+        research_dossiers=research_summary.dossiers_created,
+        dissections=dissection_summary.dissections_created,
+        blog_drafts=content_summary.blog_drafts_created,
+        social_drafts=content_summary.social_drafts_created,
+    )
+    with closing(get_connection(database_path)) as connection:
+        log_run_event(
+            connection,
+            run_id,
+            "content_recovery",
+            "complete",
+            (
+                f"Recovered {summary.blog_drafts} blog draft(s) and "
+                f"{summary.social_drafts} social draft(s) from qualified topics."
+            ),
+            json.dumps(summary.__dict__),
+        )
+        connection.commit()
+    return summary
+
+
 def run_real_pipeline(
     database_path=DATABASE_PATH,
     max_articles_per_source: int | None = None,
     lock_limit: int | None = None,
     fetch_source_time_budget_seconds: int = 90,
+    run_id: str | None = None,
 ) -> PipelineSummary:
     initialize_database(database_path=database_path)
-    run_id = datetime.now(UTC).strftime("auto_%Y%m%d_%H%M%S")
+    run_id = run_id or datetime.now(UTC).strftime("auto_%Y%m%d_%H%M%S")
     fetch_summary = fetch_articles(
         max_articles_per_source=max_articles_per_source,
         database_path=database_path,
@@ -82,18 +143,16 @@ def run_real_pipeline(
         return summary
 
     with closing(get_connection(database_path)) as connection:
-        clear_derived_pipeline_data(connection)
-        deleted_demo_articles = delete_demo_articles(connection)
         log_run_event(
             connection,
             run_id,
             "pipeline",
-            "reset",
+            "preserve",
             (
-                "Cleared demo articles plus derived topics, scores, locks, dossiers, "
-                "dissections, drafts, and approvals before rebuilding."
+                "Preserving existing topics and content while the new run is built. "
+                "A failed or interrupted run cannot remove the last successful batch."
             ),
-            json.dumps({"deleted_demo_articles": deleted_demo_articles}),
+            json.dumps({"content_preservation": True}),
         )
         connection.commit()
 
