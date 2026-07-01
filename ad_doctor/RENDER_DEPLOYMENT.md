@@ -4,8 +4,8 @@ This project supports a no-paid-Render setup:
 
 - Render Free hosts the Streamlit review UI.
 - GitHub Actions runs the daily automation on a schedule.
-- The GitHub Action commits the updated SQLite database back to `main`.
-- Render redeploys from `main`, so the UI shows the latest generated drafts.
+- Generated drafts are created as Google Docs and indexed in a Google Sheet.
+- The Render UI reads drafts from Google Sheets/Docs.
 
 This design is required because Render Free web services sleep after idle time and cannot attach persistent disks.
 
@@ -21,7 +21,8 @@ streamlit run app.py --server.address 0.0.0.0 --server.port $PORT --server.headl
 ```
 
 - Daily runner: `.github/workflows/daily-ad-doctor.yml`.
-- Database path: `ad_doctor/database/ad_doctor.db`.
+- Database path: `ad_doctor/database/ad_doctor.db` for pipeline working cache only.
+- Draft store: Google Docs/Sheets.
 - Scheduler mode: `external`.
 
 ## Required Render Environment Variables
@@ -30,10 +31,12 @@ Set these in Render:
 
 ```text
 AD_DOCTOR_DATABASE_PATH=database/ad_doctor.db
+AD_DOCTOR_DRAFT_STORE=google
 AD_DOCTOR_APP_SCHEDULER_ENABLED=0
 AD_DOCTOR_SCHEDULER_MODE=external
 PERPLEXITY_MODEL=sonar-pro
 PERPLEXITY_ENDPOINT=https://api.perplexity.ai/v1/sonar
+GOOGLE_DRAFTS_WORKSHEET_NAME=Drafts
 ```
 
 Optional in Render:
@@ -41,6 +44,9 @@ Optional in Render:
 ```text
 PERPLEXITY_API_KEY=your_key_here
 OPENROUTER_API_KEY=your_key_here_if_used
+GOOGLE_SERVICE_ACCOUNT_JSON=your_service_account_json
+GOOGLE_DRAFTS_SPREADSHEET_ID=your_google_sheet_id
+GOOGLE_DRAFTS_FOLDER_ID=your_google_drive_folder_id
 ```
 
 The daily GitHub Action needs the same provider secrets to generate higher-quality research-backed drafts.
@@ -52,6 +58,9 @@ In GitHub, open the repository settings and add:
 ```text
 PERPLEXITY_API_KEY
 OPENROUTER_API_KEY
+GOOGLE_SERVICE_ACCOUNT_JSON
+GOOGLE_DRAFTS_SPREADSHEET_ID
+GOOGLE_DRAFTS_FOLDER_ID
 ```
 
 Optional:
@@ -112,7 +121,7 @@ Health Check Path: /_stcore/health
 - Render Free services sleep after idle time.
 - Render Free services cannot use persistent disks.
 - UI changes made while the app is running can be lost after sleep or redeploy because the database is repo-backed.
-- Daily generated drafts are persisted because GitHub Actions commits the updated database to GitHub.
+- Daily generated drafts are persisted in your Google Docs/Sheets account.
 - Some source sites may block datacenter traffic with `403 Forbidden`; those sources will be logged as failures while other sources continue.
 - Render Free blocks outbound SMTP ports such as `587`, so email alerts should not be treated as reliable on Free Render.
 

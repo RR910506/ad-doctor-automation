@@ -21,7 +21,9 @@ class RenderDeploymentTest(unittest.TestCase):
 
         self.assertIn("python -m src.daily_automation_runner", workflow)
         self.assertIn("AD_DOCTOR_SCHEDULER_MODE: external", workflow)
-        self.assertIn("git add ad_doctor/database/ad_doctor.db", workflow)
+        self.assertIn("AD_DOCTOR_DRAFT_STORE: google", workflow)
+        self.assertIn("GOOGLE_DRAFTS_SPREADSHEET_ID", workflow)
+        self.assertNotIn("git add ad_doctor/database/ad_doctor.db", workflow)
 
     def test_paid_supervisor_still_starts_streamlit_and_scheduler_worker(self) -> None:
         supervisor = (PROJECT_DIR / "start_render.py").read_text(encoding="utf-8")

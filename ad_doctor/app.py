@@ -49,6 +49,11 @@ from src.db import (
     list_topics,
 )
 from src.export_engine import export_approved_outputs
+from src.google_workspace_store import (
+    get_draft_store_mode,
+    get_google_workspace_config,
+    list_google_workspace_drafts,
+)
 from src.notification_engine import (
     list_app_users,
     list_notification_events,
@@ -751,13 +756,35 @@ def render_dashboard() -> None:
 
 
 def render_content_studio() -> None:
-    with closing(get_connection()) as connection:
-        outputs = [
-            output
-            for output in list_content_outputs(connection)
-            if output["approval_status"] != "rejected"
-        ]
-        qualified_total = count_topics(connection, status="qualified")
+    storage_mode = get_draft_store_mode()
+    google_config = get_google_workspace_config()
+    if storage_mode == "google":
+        try:
+            outputs = [
+                output
+                for output in list_google_workspace_drafts()
+                if output["approval_status"] != "rejected"
+            ]
+            google_error = None
+        except Exception as exc:
+            outputs = []
+            google_error = str(exc)
+        with closing(get_connection()) as connection:
+            qualified_total = count_topics(connection, status="qualified")
+        if google_error:
+            st.error(f"Google draft storage is not available yet: {google_error}")
+        elif google_config is None:
+            st.warning("Google draft storage is selected, but GOOGLE_DRAFTS_SPREADSHEET_ID is not configured.")
+        else:
+            st.caption("Drafts are loaded from Google Docs/Sheets. SQLite is only the automation working cache.")
+    else:
+        with closing(get_connection()) as connection:
+            outputs = [
+                output
+                for output in list_content_outputs(connection)
+                if output["approval_status"] != "rejected"
+            ]
+            qualified_total = count_topics(connection, status="qualified")
 
     if not outputs:
         st.markdown(
@@ -827,7 +854,7 @@ def render_content_studio() -> None:
         selected_timestamp, filtered_outputs = selected_batch_option
         visible_batches = [(selected_timestamp, filtered_outputs)]
 
-    topic_count = len({int(output["locked_topic_id"]) for output in filtered_outputs})
+    topic_count = len({str(output["locked_topic_id"]) for output in filtered_outputs})
     timestamp_count = len(visible_batches)
     summary_columns = st.columns([1, 1, 1, 2])
     summary_columns[0].metric("Drafts", len(filtered_outputs))
@@ -1112,10 +1139,16 @@ def output_matches_content_filters(
 
 
 def render_content_library_item(output: dict[str, object]) -> None:
+    doc_url = str(output.get("doc_url") or "")
+    if doc_url:
+        st.link_button("Open Google Doc", doc_url)
     if output["content_type"] == "social":
         render_social_draft(str(output["draft_markdown"] or ""))
     else:
         st.markdown(str(output["draft_markdown"] or ""))
+    if output.get("storage") == "google":
+        st.caption("Review status for Google-backed drafts is managed in the Google Sheet for now.")
+        return
     render_content_review_actions(output)
 
 

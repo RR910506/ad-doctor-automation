@@ -11,9 +11,14 @@ from src.db import (
     get_connection,
     get_latest_locked_run_id,
     insert_content_output,
+    list_content_outputs,
     list_dissection_outputs,
     list_research_dossiers,
     log_run_event,
+)
+from src.google_workspace_store import (
+    is_google_draft_store_enabled,
+    sync_content_outputs_to_google_workspace,
 )
 from src.settings_engine import (
     load_content_framework_settings,
@@ -162,13 +167,21 @@ def generate_content_outputs(
             blog_drafts_created=blog_count,
             social_drafts_created=social_count,
         )
+        google_synced = 0
+        if is_google_draft_store_enabled():
+            google_synced = sync_content_outputs_to_google_workspace(
+                list_content_outputs(connection, run_id=run_id)
+            )
         log_run_event(
             connection,
             run_id,
             "phase_9_content",
             "complete",
-            f"Generated {blog_count} blog draft(s) and {social_count} social draft(s).",
-            json.dumps(summary.__dict__),
+            (
+                f"Generated {blog_count} blog draft(s) and {social_count} social draft(s). "
+                f"Synced {google_synced} draft(s) to Google Workspace."
+            ),
+            json.dumps({**summary.__dict__, "google_synced": google_synced}),
         )
         connection.commit()
         return summary

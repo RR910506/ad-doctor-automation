@@ -12,6 +12,8 @@ services:
         value: 3.12.8
       - key: AD_DOCTOR_DATABASE_PATH
         value: database/ad_doctor.db
+      - key: AD_DOCTOR_DRAFT_STORE
+        value: google
       - key: AD_DOCTOR_APP_SCHEDULER_ENABLED
         value: "0"
       - key: AD_DOCTOR_SCHEDULER_MODE
@@ -27,6 +29,14 @@ services:
       - key: PERPLEXITY_ENDPOINT
         value: https://api.perplexity.ai/v1/sonar
       - key: OPENROUTER_API_KEY
+        sync: false
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: GOOGLE_DRAFTS_SPREADSHEET_ID
+        sync: false
+      - key: GOOGLE_DRAFTS_WORKSHEET_NAME
+        value: Drafts
+      - key: GOOGLE_DRAFTS_FOLDER_ID
         sync: false
       - key: AD_DOCTOR_SMTP_HOST
         sync: false
