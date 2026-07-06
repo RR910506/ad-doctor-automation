@@ -161,6 +161,19 @@ def run_migrations(connection: sqlite3.Connection) -> None:
     )
     connection.execute(
         """
+        CREATE TABLE IF NOT EXISTS content_writer_settings (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            provider_key TEXT NOT NULL DEFAULT 'openai',
+            enabled INTEGER NOT NULL DEFAULT 1,
+            api_key TEXT,
+            model TEXT NOT NULL DEFAULT 'gpt-4.1-mini',
+            endpoint TEXT NOT NULL DEFAULT 'https://api.openai.com/v1',
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    connection.execute(
+        """
         CREATE TABLE IF NOT EXISTS content_framework_settings (
             id INTEGER PRIMARY KEY CHECK (id = 1),
             framework_name TEXT NOT NULL DEFAULT 'The Ad Doctor Diagnostic Carousel',

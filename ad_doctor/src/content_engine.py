@@ -20,6 +20,7 @@ from src.google_workspace_store import (
     is_google_draft_store_enabled,
     sync_content_outputs_to_google_workspace,
 )
+from src.openai_content_writer import write_final_draft_with_chatgpt
 from src.settings_engine import (
     load_content_framework_settings,
     parse_carousel_structure,
@@ -145,6 +146,24 @@ def generate_content_outputs(
                 continue
 
             blog_draft = build_blog_draft(dossier, dissection["output_markdown"], blog_template)
+            blog_writer = write_final_draft_with_chatgpt(
+                content_type="blog",
+                local_draft=blog_draft,
+                dossier=dossier,
+                dissection_markdown=str(dissection["output_markdown"] or ""),
+                framework_settings=framework_settings,
+                database_path=database_path,
+            )
+            social_writer = write_final_draft_with_chatgpt(
+                content_type="social",
+                local_draft=social_draft,
+                dossier=dossier,
+                dissection_markdown=str(dissection["output_markdown"] or ""),
+                framework_settings=framework_settings,
+                database_path=database_path,
+            )
+            blog_draft = blog_writer.draft_markdown
+            social_draft = social_writer.draft_markdown
             insert_content_output(
                 connection,
                 locked_topic_id=locked_topic_id,
@@ -175,13 +194,19 @@ def generate_content_outputs(
         log_run_event(
             connection,
             run_id,
-            "phase_9_content",
-            "complete",
-            (
-                f"Generated {blog_count} blog draft(s) and {social_count} social draft(s). "
-                f"Synced {google_synced} draft(s) to Google Workspace."
+                "phase_9_content",
+                "complete",
+                (
+                    f"Generated {blog_count} blog draft(s) and {social_count} social draft(s). "
+                    f"Synced {google_synced} draft(s) to Google Workspace."
+                ),
+            json.dumps(
+                {
+                    **summary.__dict__,
+                    "google_synced": google_synced,
+                    "content_writer": "openai_chatgpt_when_configured",
+                }
             ),
-            json.dumps({**summary.__dict__, "google_synced": google_synced}),
         )
         connection.commit()
         return summary

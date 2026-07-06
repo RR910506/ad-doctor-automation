@@ -4,6 +4,7 @@ from contextlib import closing
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import json
+import os
 import re
 
 from src.config import DATABASE_PATH
@@ -15,7 +16,8 @@ from src.db import (
     log_run_event,
     upsert_research_dossier,
 )
-from src.perplexity_research import research_topic_with_perplexity
+import src.perplexity_research as perplexity_research
+from src.settings_engine import get_research_engine_by_key, load_research_settings
 from src.topic_matcher import is_same_news_event, topic_similarity
 
 
@@ -30,6 +32,7 @@ def build_research_dossiers(
     database_path=DATABASE_PATH,
     run_id: str | None = None,
 ) -> ResearchSummary:
+    apply_saved_research_provider_settings(database_path=database_path)
     requested_run_id = run_id
     run_id = requested_run_id or datetime.now(UTC).strftime("run_%Y%m%d_%H%M%S")
     dossiers_created = 0
@@ -44,12 +47,12 @@ def build_research_dossiers(
         for locked_topic in locked_topics:
             context = get_locked_topic_context(connection, int(locked_topic["id"]))
             dossier = build_local_dossier(context)
-            perplexity_research = research_topic_with_perplexity(
+            research_payload = perplexity_research.research_topic_with_perplexity(
                 str(dossier.get("topic") or ""),
                 list(dossier.get("source_articles") or []),
             )
-            dossier["perplexity_research"] = perplexity_research
-            if perplexity_research.get("status") == "completed":
+            dossier["perplexity_research"] = research_payload
+            if research_payload.get("status") == "completed":
                 dossier["research_mode"] = "perplexity_augmented"
             source_urls = dossier["source_urls"]
             upsert_research_dossier(
@@ -75,6 +78,20 @@ def build_research_dossiers(
         )
         connection.commit()
         return summary
+
+
+def apply_saved_research_provider_settings(database_path=DATABASE_PATH) -> None:
+    settings = load_research_settings(database_path=database_path)
+    engine = get_research_engine_by_key(settings.get("provider_key"))
+    api_key = str(settings.get("api_key") or "").strip()
+    if not api_key and engine.get("env_var"):
+        api_key = os.getenv(engine["env_var"], "").strip()
+    perplexity_research.ACTIVE_RESEARCH_PROVIDER = engine["key"]
+    perplexity_research.PERPLEXITY_API_KEY = api_key if engine["key"] == "perplexity" else ""
+    perplexity_research.PERPLEXITY_MODEL = str(settings.get("model") or engine["model"]).strip() or engine["model"]
+    perplexity_research.PERPLEXITY_ENDPOINT = (
+        str(settings.get("endpoint") or engine["endpoint"]).strip() or engine["endpoint"]
+    )
 
 
 def build_local_dossier(context: dict[str, object]) -> dict[str, object]:

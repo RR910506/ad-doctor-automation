@@ -40,6 +40,12 @@ services:
         value: https://api.perplexity.ai/v1/sonar
       - key: OPENROUTER_API_KEY
         sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4.1-mini
+      - key: OPENAI_BASE_URL
+        value: https://api.openai.com/v1
       - key: GOOGLE_SERVICE_ACCOUNT_JSON
         sync: false
       - key: GOOGLE_DRAFTS_SPREADSHEET_ID

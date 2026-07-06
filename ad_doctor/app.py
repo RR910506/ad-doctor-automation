@@ -72,12 +72,14 @@ from src.settings_engine import (
     get_research_engine_by_key,
     get_research_engine_by_label,
     get_research_engine_labels,
+    load_content_writer_settings,
     load_content_framework_settings,
     load_research_settings,
     parse_carousel_structure,
     parse_content_framework_prompt,
     parse_json_list,
     reset_content_framework_settings,
+    save_content_writer_settings,
     save_content_framework_settings,
     save_research_settings,
     serialize_content_framework_prompt,
@@ -767,8 +769,9 @@ def render_dashboard() -> None:
         )
 
     ai_status = get_ai_research_status()
+    writer_status = get_content_writer_status()
     st.markdown(
-        '<div class="ad-section-heading"><h3>AI research</h3><p>Provider status and tracked consumption</p></div>',
+        '<div class="ad-section-heading"><h3>AI setup</h3><p>Research and writing provider status</p></div>',
         unsafe_allow_html=True,
     )
     if ai_status["enabled"]:
@@ -780,6 +783,10 @@ def render_dashboard() -> None:
         usage_columns[2].metric("Estimated credits", usage["estimated_api_credits"])
     else:
         st.warning(str(ai_status["message"]))
+    if writer_status["enabled"]:
+        st.success(str(writer_status["message"]))
+    else:
+        st.warning(str(writer_status["message"]))
 
     st.markdown(
         '<div class="ad-section-heading"><h3>Content production</h3><p>Latest draft batches with exact timestamps</p></div>',
@@ -827,10 +834,15 @@ def render_content_studio() -> None:
             qualified_total = count_topics(connection, status="qualified")
 
     ai_status = get_ai_research_status()
+    writer_status = get_content_writer_status()
     if ai_status["enabled"]:
         st.success(str(ai_status["message"]))
     else:
         st.warning(str(ai_status["message"]))
+    if writer_status["enabled"]:
+        st.success(str(writer_status["message"]))
+    else:
+        st.warning(str(writer_status["message"]))
 
     if not outputs:
         latest_runs = list_automation_run_history(limit=1)
@@ -1411,6 +1423,44 @@ def get_ai_research_status() -> dict[str, object]:
     }
 
 
+def get_content_writer_status() -> dict[str, object]:
+    try:
+        settings = load_content_writer_settings()
+    except Exception:
+        settings = {}
+    enabled = str(settings.get("enabled") or "1") not in {"0", "false", "False", "off", "no"}
+    api_key = (
+        str(st.session_state.get("ad_doctor_openai_writer_api_key") or "").strip()
+        or str(settings.get("api_key") or "").strip()
+        or os.getenv("OPENAI_API_KEY", "").strip()
+    )
+    model = str(
+        st.session_state.get("ad_doctor_openai_writer_model")
+        or settings.get("model")
+        or os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+    ).strip()
+    if enabled and api_key:
+        return {
+            "enabled": True,
+            "engine": "ChatGPT/OpenAI",
+            "model": model,
+            "message": f"Content writing enabled through ChatGPT/OpenAI ({model}).",
+        }
+    if not enabled:
+        return {
+            "enabled": False,
+            "engine": "Local framework generator",
+            "model": model,
+            "message": "Content writing AI disabled - using local Ad Doctor framework generator.",
+        }
+    return {
+        "enabled": False,
+        "engine": "Local framework generator",
+        "model": model,
+        "message": "Content writing AI disabled - OPENAI_API_KEY missing.",
+    }
+
+
 def render_user_session_controls() -> None:
     st.subheader("Your Access")
     with st.form("user_session_form"):
@@ -1526,6 +1576,53 @@ def render_provider_settings() -> None:
         st.session_state["ad_doctor_research_endpoint"] = saved_research["endpoint"]
         apply_runtime_provider_settings()
         st.success("Research setup saved.")
+
+    st.divider()
+    render_content_writer_settings()
+
+
+def render_content_writer_settings() -> None:
+    st.write("Choose the AI that writes final blog and carousel drafts after topics pass qualification.")
+    saved_writer = load_content_writer_settings()
+    writer_enabled = str(saved_writer.get("enabled") or "1") not in {"0", "false", "False", "off", "no"}
+    with st.form("content_writer_form"):
+        enabled = st.checkbox("Use ChatGPT/OpenAI for final writing", value=writer_enabled)
+        openai_key = st.text_input(
+            "OpenAI API key",
+            value=st.session_state.get("ad_doctor_openai_writer_api_key", saved_writer.get("api_key", "")),
+            type="password",
+            help="Leave blank to use OPENAI_API_KEY from Render environment.",
+        )
+        openai_model = st.text_input(
+            "ChatGPT writing model",
+            value=st.session_state.get(
+                "ad_doctor_openai_writer_model",
+                saved_writer.get("model") or os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+            ),
+        )
+        endpoint = st.text_input(
+            "OpenAI endpoint",
+            value=saved_writer.get("endpoint") or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+        )
+        submitted = st.form_submit_button("Save ChatGPT writing setup", type="primary")
+
+    if submitted:
+        saved = save_content_writer_settings(
+            provider_key="openai",
+            enabled=enabled,
+            api_key=openai_key.strip(),
+            model=openai_model.strip() or "gpt-4.1-mini",
+            endpoint=endpoint.strip() or "https://api.openai.com/v1",
+        )
+        st.session_state["ad_doctor_openai_writer_api_key"] = saved["api_key"]
+        st.session_state["ad_doctor_openai_writer_model"] = saved["model"]
+        st.success("ChatGPT writing setup saved.")
+
+    writer_status = get_content_writer_status()
+    if writer_status["enabled"]:
+        st.success(str(writer_status["message"]))
+    else:
+        st.warning(str(writer_status["message"]))
 
 
 def render_content_framework_settings() -> None:
@@ -2400,10 +2497,15 @@ def render_automation_alerts(
         st.warning("Automation is paused for this deployment.")
 
     ai_status = get_ai_research_status()
+    writer_status = get_content_writer_status()
     if ai_status["enabled"]:
         st.success(str(ai_status["message"]))
     else:
         st.warning(str(ai_status["message"]))
+    if writer_status["enabled"]:
+        st.success(str(writer_status["message"]))
+    else:
+        st.warning(str(writer_status["message"]))
 
     schedule_times = settings.schedule_times or (settings.schedule_time,)
     settings_columns = st.columns([1, 2, 1, 1])

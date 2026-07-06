@@ -128,6 +128,14 @@ DEFAULT_RESEARCH_SETTINGS = {
     "api_key": "",
 }
 
+DEFAULT_CONTENT_WRITER_SETTINGS = {
+    "provider_key": "openai",
+    "enabled": "1",
+    "model": "gpt-4.1-mini",
+    "endpoint": "https://api.openai.com/v1",
+    "api_key": "",
+}
+
 
 DEFAULT_CONTENT_FRAMEWORK = {
     "framework_name": "The Ad Doctor Diagnostic Carousel",
@@ -297,6 +305,55 @@ def save_research_settings(
         )
         connection.commit()
     return load_research_settings(database_path=database_path)
+
+
+def load_content_writer_settings(database_path=DATABASE_PATH) -> dict[str, str]:
+    with closing(get_connection(database_path)) as connection:
+        row = connection.execute(
+            """
+            SELECT provider_key, enabled, api_key, model, endpoint
+            FROM content_writer_settings
+            WHERE id = 1
+            """
+        ).fetchone()
+    if not row:
+        return dict(DEFAULT_CONTENT_WRITER_SETTINGS)
+    settings = dict(DEFAULT_CONTENT_WRITER_SETTINGS)
+    settings.update({key: str(row[key] if row[key] is not None else "") for key in row.keys()})
+    return settings
+
+
+def save_content_writer_settings(
+    *,
+    provider_key: str,
+    enabled: bool,
+    api_key: str,
+    model: str,
+    endpoint: str,
+    database_path=DATABASE_PATH,
+) -> dict[str, str]:
+    provider_key = provider_key.strip() or "openai"
+    model = model.strip() or DEFAULT_CONTENT_WRITER_SETTINGS["model"]
+    endpoint = endpoint.strip() or DEFAULT_CONTENT_WRITER_SETTINGS["endpoint"]
+    with closing(get_connection(database_path)) as connection:
+        connection.execute(
+            """
+            INSERT INTO content_writer_settings (
+                id, provider_key, enabled, api_key, model, endpoint, updated_at
+            )
+            VALUES (1, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(id) DO UPDATE SET
+                provider_key = excluded.provider_key,
+                enabled = excluded.enabled,
+                api_key = excluded.api_key,
+                model = excluded.model,
+                endpoint = excluded.endpoint,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (provider_key, 1 if enabled else 0, api_key.strip(), model, endpoint),
+        )
+        connection.commit()
+    return load_content_writer_settings(database_path=database_path)
 
 
 def load_content_framework_settings(database_path=DATABASE_PATH) -> dict[str, str]:
