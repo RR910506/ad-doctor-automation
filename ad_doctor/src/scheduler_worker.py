@@ -40,7 +40,7 @@ def main() -> int:
     recovered = requeue_interrupted_worker_runs(DATABASE_PATH)
     record_worker_heartbeat(
         "idle",
-        f"Cloud scheduler started. {recovered} interrupted run(s) returned to the queue.",
+        f"Cloud scheduler started. {recovered} interrupted run(s) marked recovered.",
         worker_id=worker_id,
         database_path=DATABASE_PATH,
     )

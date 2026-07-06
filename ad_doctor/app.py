@@ -20,6 +20,7 @@ from src.automation_engine import (
 )
 from src.app_scheduler import (
     get_app_scheduler_status,
+    get_worker_state,
     list_automation_run_history,
     start_app_scheduler,
 )
@@ -438,6 +439,11 @@ def inject_app_styles() -> None:
             color: #18210c;
         }
 
+        .ad-badge.is-danger {
+            background: #f4d2d2;
+            color: var(--ad-danger);
+        }
+
         .ad-filter-shell {
             padding: .9rem;
             margin: .25rem 0 1rem;
@@ -677,15 +683,30 @@ def render_app_header(page: str) -> None:
 
 
 def render_dashboard() -> None:
+    storage_mode = get_draft_store_mode()
+    google_error = None
     with closing(get_connection()) as connection:
         sources = list_sources(connection)
-        article_total = count_articles(connection)
-        qualified_total = count_topics(connection, status="qualified")
-        outputs = [
-            output
-            for output in list_content_outputs(connection)
-            if output["approval_status"] != "rejected"
-        ]
+        if storage_mode == "google":
+            article_total = 0
+            qualified_total = 0
+            try:
+                outputs = [
+                    output
+                    for output in list_google_workspace_drafts()
+                    if output["approval_status"] != "rejected"
+                ]
+            except Exception as exc:
+                outputs = []
+                google_error = str(exc)
+        else:
+            article_total = count_articles(connection)
+            qualified_total = count_topics(connection, status="qualified")
+            outputs = [
+                output
+                for output in list_content_outputs(connection)
+                if output["approval_status"] != "rejected"
+            ]
 
     active_sources = sum(1 for source in sources if bool(source.get("active_status")))
     social_total = sum(1 for output in outputs if output["content_type"] == "social")
@@ -700,6 +721,18 @@ def render_dashboard() -> None:
     content_metrics[0].metric("Social drafts", social_total)
     content_metrics[1].metric("Blog drafts", blog_total)
     content_metrics[2].metric("Content days", content_days)
+
+    if storage_mode == "google":
+        google_config = get_google_workspace_config()
+        if google_error:
+            st.error(f"Google draft storage is not connected yet: {google_error}")
+        elif google_config is None:
+            st.warning(
+                "Google draft storage is active, but GOOGLE_DRAFTS_SPREADSHEET_ID is not configured yet. "
+                "Old SQLite drafts are ignored."
+            )
+        else:
+            st.caption("Drafts are loaded from Google Docs/Sheets. Old SQLite draft data is ignored.")
 
     action_columns = st.columns([1, 1, 3])
     with action_columns[0]:
@@ -721,6 +754,8 @@ def render_dashboard() -> None:
     )
     st.markdown(f'<div class="ad-run-strip">{schedule_badges}</div>', unsafe_allow_html=True)
 
+    render_scheduler_proof_panel(settings)
+
     run_history = enrich_run_history(list_automation_run_history(limit=6))
     if run_history:
         render_run_history_rows(run_history)
@@ -731,15 +766,20 @@ def render_dashboard() -> None:
             unsafe_allow_html=True,
         )
 
-    usage = estimate_credit_usage()
+    ai_status = get_ai_research_status()
     st.markdown(
-        '<div class="ad-section-heading"><h3>Research usage</h3><p>Tracked provider consumption</p></div>',
+        '<div class="ad-section-heading"><h3>AI research</h3><p>Provider status and tracked consumption</p></div>',
         unsafe_allow_html=True,
     )
-    usage_columns = st.columns(3)
-    usage_columns[0].metric("Research calls", usage["research_calls"])
-    usage_columns[1].metric("Tracked tokens", usage["total_tokens"])
-    usage_columns[2].metric("Estimated credits", usage["estimated_api_credits"])
+    if ai_status["enabled"]:
+        st.success(str(ai_status["message"]))
+        usage = estimate_credit_usage()
+        usage_columns = st.columns(3)
+        usage_columns[0].metric("Research calls", usage["research_calls"])
+        usage_columns[1].metric("Tracked tokens", usage["total_tokens"])
+        usage_columns[2].metric("Estimated credits", usage["estimated_api_credits"])
+    else:
+        st.warning(str(ai_status["message"]))
 
     st.markdown(
         '<div class="ad-section-heading"><h3>Content production</h3><p>Latest draft batches with exact timestamps</p></div>',
@@ -786,12 +826,27 @@ def render_content_studio() -> None:
             ]
             qualified_total = count_topics(connection, status="qualified")
 
+    ai_status = get_ai_research_status()
+    if ai_status["enabled"]:
+        st.success(str(ai_status["message"]))
+    else:
+        st.warning(str(ai_status["message"]))
+
     if not outputs:
+        latest_runs = list_automation_run_history(limit=1)
+        latest_reason = ""
+        if latest_runs:
+            latest = latest_runs[0]
+            latest_reason = (
+                f"Latest run status: {latest.get('status')}. "
+                f"{latest.get('error_message') or latest.get('latest_message') or ''}"
+            )
         st.markdown(
-            """
+            f"""
             <div class="ad-empty-panel">
                 <strong>Your qualified topics are safe.</strong><br>
-                The last draft build did not finish, so no publishable batch was created.
+                The last draft build did not finish, so no publishable batch was created.<br>
+                {escape(latest_reason)}
             </div>
             """,
             unsafe_allow_html=True,
@@ -1033,6 +1088,29 @@ def render_content_batch_rows(batches: list[tuple[str, list[dict[str, object]]]]
     st.markdown('<div class="ad-timeline">' + "".join(rows) + "</div>", unsafe_allow_html=True)
 
 
+def render_scheduler_proof_panel(settings) -> None:
+    scheduler_status = get_app_scheduler_status()
+    worker_state = get_worker_state()
+    scheduler_mode = os.getenv("AD_DOCTOR_SCHEDULER_MODE", "app").strip().lower()
+    upcoming_runs = build_upcoming_run_preview(
+        settings.schedule_times or (settings.schedule_time,),
+        settings.timezone,
+        limit=1,
+    )
+    next_run = upcoming_runs[0]["next_trigger"] if upcoming_runs else "not scheduled"
+    heartbeat = "no heartbeat yet"
+    worker_id = "not recorded"
+    if worker_state:
+        heartbeat = str(worker_state.get("last_heartbeat_at") or heartbeat)
+        worker_id = str(worker_state.get("worker_id") or worker_id)
+    proof_columns = st.columns(4)
+    proof_columns[0].metric("Scheduler mode", scheduler_mode.title())
+    proof_columns[1].metric("Worker", "Healthy" if scheduler_status.running else "No heartbeat")
+    proof_columns[2].metric("Last heartbeat", heartbeat)
+    proof_columns[3].metric("Next run", next_run)
+    st.caption(f"Worker id: {worker_id}. {scheduler_status.message}")
+
+
 def render_run_history_rows(run_history: list[dict[str, object]]) -> None:
     rows = []
     for run in run_history:
@@ -1044,6 +1122,7 @@ def render_run_history_rows(run_history: list[dict[str, object]]) -> None:
             time_label = schedule_label or "Schedule time unavailable"
         status = str(run.get("status") or "unknown")
         is_positive_status = status in {"complete", "recovered"}
+        is_problem_status = status in {"failed", "error", "timed_out"}
         default_message = (
             "Queued and waiting for the previous timestamp to finish."
             if status == "queued"
@@ -1055,6 +1134,18 @@ def render_run_history_rows(run_history: list[dict[str, object]]) -> None:
             or run.get("run_id")
             or default_message
         )
+        phase = str(run.get("current_phase") or "").strip()
+        source = str(run.get("current_source") or "").strip()
+        heartbeat = str(run.get("heartbeat_at") or "").strip()
+        progress_bits = []
+        if phase:
+            progress_bits.append(f"Phase: {phase}")
+        if source:
+            progress_bits.append(f"Source: {source}")
+        if heartbeat:
+            progress_bits.append(f"Heartbeat: {heartbeat}")
+        progress_text = " | ".join(progress_bits)
+        status_label = status.replace("_", " ").title()
         rows.append(
             f"""
             <div class="ad-timeline-row">
@@ -1062,8 +1153,9 @@ def render_run_history_rows(run_history: list[dict[str, object]]) -> None:
                 <div>
                     <div class="ad-row-title">Scheduled scan at {escape(str(run.get('scheduled_time') or ''))}</div>
                     <div class="ad-row-meta">{escape(latest_message)}</div>
+                    <div class="ad-row-meta">{escape(progress_text)}</div>
                 </div>
-                <span class="ad-badge{' is-accent' if is_positive_status else ''}">{escape(status.title())}</span>
+                <span class="ad-badge{' is-accent' if is_positive_status else ' is-danger' if is_problem_status else ''}">{escape(status_label)}</span>
             </div>
             """
         )
@@ -1266,6 +1358,59 @@ def estimate_credit_usage() -> dict[str, int]:
     }
 
 
+def get_ai_research_status() -> dict[str, object]:
+    try:
+        saved_settings = load_research_settings()
+    except Exception:
+        saved_settings = {}
+    provider_key = str(
+        st.session_state.get("ad_doctor_research_provider")
+        or saved_settings.get("provider_key")
+        or "perplexity"
+    )
+    engine = get_research_engine_by_key(provider_key)
+    saved_key = str(saved_settings.get("api_key") or "").strip()
+    session_key = str(st.session_state.get("ad_doctor_research_api_key") or "").strip()
+    env_key = str(os.getenv(engine.get("env_var", ""), "") or "").strip() if engine.get("env_var") else ""
+    openrouter_key = str(os.getenv("OPENROUTER_API_KEY", "") or "").strip()
+    has_live_key = bool(session_key or saved_key or env_key)
+    if engine["key"] == "approved_source_only":
+        return {
+            "enabled": False,
+            "engine": engine["label"],
+            "message": "AI research disabled - using approved-source local synthesis only.",
+        }
+    if engine["key"] != "perplexity":
+        return {
+            "enabled": False,
+            "engine": engine["label"],
+            "message": (
+                "AI research disabled - this provider is saved as a slot, but the live adapter "
+                "is not connected yet."
+            ),
+        }
+    if has_live_key:
+        return {
+            "enabled": True,
+            "engine": engine["label"],
+            "message": f"AI research enabled through {engine['label']}.",
+        }
+    if openrouter_key:
+        return {
+            "enabled": False,
+            "engine": engine["label"],
+            "message": (
+                "AI research disabled - OpenRouter key is present, but the current live research "
+                "adapter is Perplexity."
+            ),
+        }
+    return {
+        "enabled": False,
+        "engine": engine["label"],
+        "message": "AI research disabled - Perplexity/OpenRouter API key missing.",
+    }
+
+
 def render_user_session_controls() -> None:
     st.subheader("Your Access")
     with st.form("user_session_form"):
@@ -1297,19 +1442,18 @@ def render_user_session_controls() -> None:
 
 
 def render_provider_status() -> None:
+    ai_status = get_ai_research_status()
     saved_settings = load_research_settings()
     engine = get_research_engine_by_key(
         st.session_state.get("ad_doctor_research_provider")
         or saved_settings.get("provider_key")
     )
     research_model = st.session_state.get("ad_doctor_research_model") or saved_settings.get("model") or engine["model"]
-    has_research_key = bool(st.session_state.get("ad_doctor_research_api_key") or saved_settings.get("api_key"))
-    has_openrouter_key = bool(st.session_state.get("ad_doctor_openrouter_api_key"))
     st.caption(f"Research engine: {engine['label']} | Model: {research_model}")
-    if has_research_key or has_openrouter_key:
-        st.success("Session API key ready.")
+    if ai_status["enabled"]:
+        st.success(str(ai_status["message"]))
     else:
-        st.info("Using environment keys or local fallback.")
+        st.warning(str(ai_status["message"]))
 
 
 def render_provider_settings() -> None:
@@ -1580,11 +1724,66 @@ def render_article_fetch_status() -> None:
                 st.error(str(exc))
 
     with closing(get_connection()) as connection:
-        logs = list_run_logs(connection, phase="phase_3_article_fetch", limit=50)
+        logs = list_run_logs(connection, phase="phase_3_article_fetch", limit=500)
     if logs:
-        st.dataframe(logs, width="stretch", hide_index=True)
+        diagnostics = build_fetch_diagnostics(logs)
+        diagnostic_columns = st.columns(4)
+        diagnostic_columns[0].metric("Current run", diagnostics["current_run"])
+        diagnostic_columns[1].metric("Last event", diagnostics["last_event"])
+        diagnostic_columns[2].metric("Failed sources", diagnostics["failed_sources"])
+        diagnostic_columns[3].metric("Timed-out sources", diagnostics["timed_out_sources"])
+
+        filter_columns = st.columns(4)
+        run_options = ["All runs", *sorted({str(log["run_id"]) for log in logs}, reverse=True)]
+        event_options = ["All events", *sorted({str(log["event_type"]) for log in logs})]
+        source_options = ["All sources", *sorted({extract_log_source_name(log) for log in logs if extract_log_source_name(log)})]
+        selected_run = filter_columns[0].selectbox("Run ID", run_options)
+        selected_event = filter_columns[1].selectbox("Event type", event_options)
+        selected_source = filter_columns[2].selectbox("Source", source_options)
+        max_rows = filter_columns[3].number_input("Rows", min_value=25, max_value=500, value=100, step=25)
+        filtered_logs = [
+            log
+            for log in logs
+            if (selected_run == "All runs" or str(log["run_id"]) == selected_run)
+            and (selected_event == "All events" or str(log["event_type"]) == selected_event)
+            and (selected_source == "All sources" or extract_log_source_name(log) == selected_source)
+        ][: int(max_rows)]
+        for log in filtered_logs:
+            label = (
+                f"{log['created_at']} | {log['event_type']} | "
+                f"{extract_log_source_name(log) or log['run_id']}"
+            )
+            with st.expander(label):
+                st.write(log["message"])
+                metadata = str(log.get("metadata_json") or "").strip()
+                if metadata:
+                    st.code(metadata, language="json")
     else:
         st.info("No article fetch run has been logged yet.")
+
+
+def extract_log_source_name(log: dict[str, object]) -> str:
+    metadata = str(log.get("metadata_json") or "").strip()
+    if metadata:
+        try:
+            payload = json.loads(metadata)
+        except ValueError:
+            payload = {}
+        if isinstance(payload, dict) and payload.get("source_name"):
+            return str(payload["source_name"])
+    message = str(log.get("message") or "")
+    match = re.search(r"(?:Checking source:|Finished|Failed source|Stopped source)\s+([^:.]+)", message)
+    return match.group(1).strip() if match else ""
+
+
+def build_fetch_diagnostics(logs: list[dict[str, object]]) -> dict[str, object]:
+    latest = logs[0] if logs else {}
+    return {
+        "current_run": str(latest.get("run_id") or "none"),
+        "last_event": str(latest.get("event_type") or "none"),
+        "failed_sources": sum(1 for log in logs if str(log.get("event_type")) == "source_failed"),
+        "timed_out_sources": sum(1 for log in logs if str(log.get("event_type")) == "source_timed_out"),
+    }
 
 
 def render_extracted_articles() -> None:
@@ -2183,15 +2382,28 @@ def render_automation_alerts(
     settings = get_automation_settings()
     st.write("Choose when Ad Doctor should run the approved-source scan.")
     scheduler_status = get_app_scheduler_status()
-    if scheduler_status.enabled_by_env and scheduler_status.running:
-        st.success(
-            "Automation is active. Every selected timestamp is watched independently, "
-            "even when nobody has the website open."
-        )
+    worker_state = get_worker_state()
+    scheduler_mode = os.getenv("AD_DOCTOR_SCHEDULER_MODE", "app").strip().lower()
+    proof_columns = st.columns(4)
+    proof_columns[0].metric("Scheduler mode", scheduler_mode.title())
+    proof_columns[1].metric("Worker", "Healthy" if scheduler_status.running else "No heartbeat")
+    proof_columns[2].metric(
+        "Last heartbeat",
+        str((worker_state or {}).get("last_heartbeat_at") or "not recorded"),
+    )
+    proof_columns[3].metric("Timezone", settings.timezone)
+    if scheduler_status.running:
+        st.success("Worker heartbeat is fresh. Saved timestamps will be queued independently.")
     elif scheduler_status.enabled_by_env:
         st.warning(scheduler_status.message)
     else:
         st.warning("Automation is paused for this deployment.")
+
+    ai_status = get_ai_research_status()
+    if ai_status["enabled"]:
+        st.success(str(ai_status["message"]))
+    else:
+        st.warning(str(ai_status["message"]))
 
     schedule_times = settings.schedule_times or (settings.schedule_time,)
     settings_columns = st.columns([1, 2, 1, 1])
@@ -2261,7 +2473,7 @@ def render_automation_alerts(
 
     history = list_automation_run_history(limit=25)
     if history:
-        with st.expander("Recent scheduled runs"):
+        with st.expander("Recent scheduled runs", expanded=True):
             st.dataframe(history, width="stretch", hide_index=True)
     else:
         st.info("No scheduled auto-runs have been recorded yet.")

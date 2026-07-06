@@ -293,7 +293,7 @@ class AppSchedulerTest(unittest.TestCase):
         self.assertIsNone(blocked_while_running)
         self.assertEqual(second_claim[1], "10:00")
 
-    def test_worker_restart_returns_running_timestamp_to_queue(self) -> None:
+    def test_worker_restart_marks_running_timestamp_recovered(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             database_path = Path(temporary_directory) / "ad_doctor.db"
             save_automation_settings(
@@ -311,7 +311,7 @@ class AppSchedulerTest(unittest.TestCase):
             history = list_automation_run_history(database_path=database_path)
 
         self.assertEqual(recovered, 1)
-        self.assertEqual(history[0]["status"], "queued")
+        self.assertEqual(history[0]["status"], "recovered")
 
     def test_cloud_worker_catches_yesterdays_slot_before_todays_time(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -348,7 +348,7 @@ class AppSchedulerTest(unittest.TestCase):
         self.assertTrue(status.running)
         self.assertIn("Waiting", status.message)
 
-    def test_stale_running_history_is_marked_interrupted(self) -> None:
+    def test_stale_running_history_is_marked_timed_out(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             database_path = Path(temporary_directory) / "ad_doctor.db"
             initialize_database(
@@ -373,9 +373,9 @@ class AppSchedulerTest(unittest.TestCase):
                     "SELECT status FROM automation_run_history LIMIT 1"
                 ).fetchone()["status"]
 
-        self.assertEqual(history[0]["status"], "error")
-        self.assertIn("interrupted", history[0]["error_message"].lower())
-        self.assertEqual(stored_status, "running")
+        self.assertEqual(history[0]["status"], "timed_out")
+        self.assertIn("timed out", history[0]["error_message"].lower())
+        self.assertEqual(stored_status, "timed_out")
 
 
 class SmtpSettingsTest(unittest.TestCase):

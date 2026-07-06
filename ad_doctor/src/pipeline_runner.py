@@ -4,6 +4,7 @@ from contextlib import closing
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import json
+from typing import Any, Callable
 
 from src.article_fetcher import fetch_articles
 from src.config import DATABASE_PATH
@@ -102,15 +103,18 @@ def run_real_pipeline(
     lock_limit: int | None = None,
     fetch_source_time_budget_seconds: int = 90,
     run_id: str | None = None,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> PipelineSummary:
     initialize_database(database_path=database_path)
     run_id = run_id or datetime.now(UTC).strftime("auto_%Y%m%d_%H%M%S")
+    emit_pipeline_progress(progress_callback, "pipeline", "start", "Starting full automation pipeline.")
     fetch_summary = fetch_articles(
         max_articles_per_source=max_articles_per_source,
         database_path=database_path,
         run_id=run_id,
         exhaustive_scan=True,
         source_time_budget_seconds=fetch_source_time_budget_seconds,
+        progress_callback=progress_callback,
     )
 
     if fetch_summary.inserted + fetch_summary.updated == 0:
@@ -142,6 +146,7 @@ def run_real_pipeline(
             connection.commit()
         return summary
 
+    emit_pipeline_progress(progress_callback, "phase_4_topic_extraction", "phase_start", "Extracting topics.")
     with closing(get_connection(database_path)) as connection:
         log_run_event(
             connection,
@@ -162,12 +167,16 @@ def run_real_pipeline(
         article_fetch_run_id=None,
         article_limit=None,
     )
+    emit_pipeline_progress(progress_callback, "phase_4_topic_extraction", "phase_complete", "Topic extraction complete.")
+    emit_pipeline_progress(progress_callback, "phase_5_coverage", "phase_start", "Expanding topic coverage.")
     expand_topic_coverage_from_stored_articles(
         database_path=database_path,
         run_id=run_id,
         topic_limit=None,
     )
+    emit_pipeline_progress(progress_callback, "phase_5_qualification", "phase_start", "Applying 3-source qualification.")
     qualification_summary = qualify_topics(database_path=database_path, run_id=run_id)
+    emit_pipeline_progress(progress_callback, "phase_5_coverage_backfill", "phase_start", "Searching near-qualified topic coverage.")
     coverage_search_summary = backfill_near_qualified_topic_coverage(
         database_path=database_path,
         run_id=run_id,
@@ -187,10 +196,14 @@ def run_real_pipeline(
     effective_lock_limit = (
         qualification_summary.qualified_topics if lock_limit is None else lock_limit
     )
+    emit_pipeline_progress(progress_callback, "phase_6_locking", "phase_start", "Locking qualified topics.")
     prioritize_topics(database_path=database_path, run_id=run_id, limit=effective_lock_limit)
     lock_summary = lock_top_topics(database_path=database_path, run_id=run_id, limit=effective_lock_limit)
+    emit_pipeline_progress(progress_callback, "phase_7_research", "phase_start", "Building research dossiers.")
     research_summary = build_research_dossiers(database_path=database_path, run_id=run_id)
+    emit_pipeline_progress(progress_callback, "phase_8_dissection", "phase_start", "Generating campaign dissections.")
     dissection_summary = run_campaign_dissections(database_path=database_path, run_id=run_id)
+    emit_pipeline_progress(progress_callback, "phase_9_content", "phase_start", "Generating blog and social drafts.")
     content_summary = generate_content_outputs(database_path=database_path, run_id=run_id)
 
     summary = PipelineSummary(
@@ -219,4 +232,22 @@ def run_real_pipeline(
             json.dumps(summary.__dict__),
         )
         connection.commit()
+    emit_pipeline_progress(progress_callback, "pipeline", "complete", "Full automation pipeline complete.")
     return summary
+
+
+def emit_pipeline_progress(
+    progress_callback: Callable[[dict[str, Any]], None] | None,
+    phase: str,
+    event_type: str,
+    message: str,
+) -> None:
+    if progress_callback is None:
+        return
+    progress_callback(
+        {
+            "phase": phase,
+            "event_type": event_type,
+            "message": message,
+        }
+    )

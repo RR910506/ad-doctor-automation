@@ -7,18 +7,23 @@ REPOSITORY_DIR = PROJECT_DIR.parent
 
 
 class RenderDeploymentTest(unittest.TestCase):
-    def test_render_free_uses_ui_only_entrypoint(self) -> None:
+    def test_render_uses_worker_supervisor_and_persistent_disk(self) -> None:
         render_yaml = (REPOSITORY_DIR / "render.yaml").read_text(encoding="utf-8")
 
-        self.assertIn("plan: free", render_yaml)
-        self.assertIn("startCommand: streamlit run app.py", render_yaml)
+        self.assertIn("plan: starter", render_yaml)
+        self.assertIn("startCommand: python start_render.py", render_yaml)
+        self.assertIn("mountPath: /opt/render/project/src/ad_doctor_data", render_yaml)
+        self.assertIn("AD_DOCTOR_DATABASE_PATH", render_yaml)
         self.assertIn("AD_DOCTOR_SCHEDULER_MODE", render_yaml)
-        self.assertIn("value: external", render_yaml)
-        self.assertNotIn("mountPath:", render_yaml)
+        self.assertIn("value: worker", render_yaml)
+        self.assertIn("AD_DOCTOR_CLEAR_SQLITE_GENERATED_DATA_FOR_GOOGLE", render_yaml)
+        self.assertIn('value: "0"', render_yaml)
 
-    def test_github_actions_runs_daily_automation(self) -> None:
+    def test_github_actions_is_manual_fallback_only(self) -> None:
         workflow = (REPOSITORY_DIR / ".github" / "workflows" / "daily-ad-doctor.yml").read_text(encoding="utf-8")
 
+        self.assertIn("workflow_dispatch:", workflow)
+        self.assertNotIn("schedule:", workflow)
         self.assertIn("python -m src.daily_automation_runner", workflow)
         self.assertIn("AD_DOCTOR_SCHEDULER_MODE: external", workflow)
         self.assertIn("AD_DOCTOR_DRAFT_STORE: google", workflow)

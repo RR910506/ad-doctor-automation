@@ -35,7 +35,7 @@ class GoogleWorkspaceConfig:
 
 
 def get_draft_store_mode() -> str:
-    return os.getenv("AD_DOCTOR_DRAFT_STORE", "sqlite").strip().lower() or "sqlite"
+    return os.getenv("AD_DOCTOR_DRAFT_STORE", "google").strip().lower() or "google"
 
 
 def is_google_draft_store_enabled() -> bool:

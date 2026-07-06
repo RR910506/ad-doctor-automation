@@ -190,6 +190,20 @@ def run_migrations(connection: sqlite3.Connection) -> None:
             run_id TEXT,
             status TEXT NOT NULL,
             error_message TEXT,
+            current_phase TEXT,
+            current_source TEXT,
+            total_sources INTEGER NOT NULL DEFAULT 0,
+            completed_sources INTEGER NOT NULL DEFAULT 0,
+            failed_sources INTEGER NOT NULL DEFAULT 0,
+            articles_scanned INTEGER NOT NULL DEFAULT 0,
+            qualified_topics INTEGER NOT NULL DEFAULT 0,
+            social_drafts_created INTEGER NOT NULL DEFAULT 0,
+            blog_drafts_created INTEGER NOT NULL DEFAULT 0,
+            research_calls INTEGER NOT NULL DEFAULT 0,
+            tracked_tokens INTEGER NOT NULL DEFAULT 0,
+            estimated_credits INTEGER NOT NULL DEFAULT 0,
+            heartbeat_at TEXT,
+            worker_id TEXT,
             started_at TEXT,
             finished_at TEXT,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -210,6 +224,26 @@ def run_migrations(connection: sqlite3.Connection) -> None:
         )
         """
     )
+    ensure_columns(
+        connection,
+        "automation_run_history",
+        {
+            "current_phase": "TEXT",
+            "current_source": "TEXT",
+            "total_sources": "INTEGER NOT NULL DEFAULT 0",
+            "completed_sources": "INTEGER NOT NULL DEFAULT 0",
+            "failed_sources": "INTEGER NOT NULL DEFAULT 0",
+            "articles_scanned": "INTEGER NOT NULL DEFAULT 0",
+            "qualified_topics": "INTEGER NOT NULL DEFAULT 0",
+            "social_drafts_created": "INTEGER NOT NULL DEFAULT 0",
+            "blog_drafts_created": "INTEGER NOT NULL DEFAULT 0",
+            "research_calls": "INTEGER NOT NULL DEFAULT 0",
+            "tracked_tokens": "INTEGER NOT NULL DEFAULT 0",
+            "estimated_credits": "INTEGER NOT NULL DEFAULT 0",
+            "heartbeat_at": "TEXT",
+            "worker_id": "TEXT",
+        },
+    )
     connection.execute(
         "CREATE INDEX IF NOT EXISTS idx_automation_run_history_scheduled_at ON automation_run_history (scheduled_date, scheduled_time)"
     )
@@ -228,11 +262,27 @@ def run_migrations(connection: sqlite3.Connection) -> None:
     ensure_automation_settings(connection)
 
 
+def ensure_columns(
+    connection: sqlite3.Connection,
+    table_name: str,
+    columns: dict[str, str],
+) -> None:
+    existing_columns = {
+        row["name"]
+        for row in connection.execute(f"PRAGMA table_info({table_name})").fetchall()
+    }
+    for column_name, column_definition in columns.items():
+        if column_name not in existing_columns:
+            connection.execute(
+                f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}"
+            )
+
+
 def clear_generated_data_for_google_store_once(connection: sqlite3.Connection) -> None:
-    draft_store = os.getenv("AD_DOCTOR_DRAFT_STORE", "sqlite").strip().lower()
     should_clear = (
-        draft_store == "google"
-        or os.getenv("AD_DOCTOR_CLEAR_SQLITE_GENERATED_DATA_FOR_GOOGLE", "0").strip().lower()
+        os.getenv("AD_DOCTOR_CLEAR_SQLITE_GENERATED_DATA_FOR_GOOGLE", "0")
+        .strip()
+        .lower()
         in {"1", "true", "yes", "on"}
     )
     if not should_clear:
@@ -248,10 +298,6 @@ def clear_generated_data_for_google_store_once(connection: sqlite3.Connection) -
 
     connection.execute("PRAGMA foreign_keys = OFF")
     for table in (
-        "notification_events",
-        "automation_worker_state",
-        "automation_run_history",
-        "run_logs",
         "approvals",
         "content_outputs",
         "dissection_outputs",

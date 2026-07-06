@@ -3,27 +3,35 @@ services:
     name: ad-doctor
     runtime: python
     rootDir: ad_doctor
-    plan: free
+    plan: starter
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    startCommand: streamlit run app.py --server.address 0.0.0.0 --server.port $PORT --server.headless true --browser.gatherUsageStats false
+    startCommand: python start_render.py
     healthCheckPath: /_stcore/health
+    disk:
+      name: ad-doctor-data
+      mountPath: /opt/render/project/src/ad_doctor_data
+      sizeGB: 1
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.8
       - key: AD_DOCTOR_DATABASE_PATH
-        value: database/ad_doctor.db
+        value: /opt/render/project/src/ad_doctor_data/ad_doctor.db
       - key: AD_DOCTOR_DRAFT_STORE
         value: google
       - key: AD_DOCTOR_CLEAR_SQLITE_GENERATED_DATA_FOR_GOOGLE
-        value: "1"
+        value: "0"
       - key: AD_DOCTOR_APP_SCHEDULER_ENABLED
         value: "0"
       - key: AD_DOCTOR_SCHEDULER_MODE
-        value: external
+        value: worker
       - key: AD_DOCTOR_SCHEDULER_POLL_SECONDS
-        value: "60"
+        value: "30"
       - key: AD_DOCTOR_SCHEDULER_CATCHUP_HOURS
         value: "24"
+      - key: AD_DOCTOR_WORKER_STALE_SECONDS
+        value: "900"
+      - key: AD_DOCTOR_JOB_TIMEOUT_SECONDS
+        value: "10800"
       - key: PERPLEXITY_API_KEY
         sync: false
       - key: PERPLEXITY_MODEL

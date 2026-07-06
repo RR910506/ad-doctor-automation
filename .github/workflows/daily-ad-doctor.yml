@@ -1,11 +1,7 @@
-name: Daily Ad Doctor Automation
+name: Manual Ad Doctor Automation Fallback
 
 on:
   workflow_dispatch:
-  schedule:
-    # 09:15 Asia/Kolkata. The app schedule defaults to 09:00, so this gives
-    # the due-slot claim a small buffer while staying predictable.
-    - cron: "45 3 * * *"
 
 permissions:
   contents: write

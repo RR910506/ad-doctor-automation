@@ -21,6 +21,8 @@ from src.pipeline_runner import PipelineSummary, run_real_pipeline
 DEFAULT_POLL_SECONDS = 60
 DEFAULT_CATCHUP_HOURS = 24
 WORKER_HEARTBEAT_STALE_SECONDS = 180
+DEFAULT_JOB_TIMEOUT_SECONDS = 60 * 60 * 3
+TERMINAL_RUN_STATUSES = {"complete", "completed", "failed", "error", "timed_out", "recovered"}
 
 
 @dataclass(frozen=True)
@@ -131,10 +133,9 @@ def get_scheduler_mode() -> str:
 def get_external_scheduler_status() -> AppSchedulerStatus:
     return AppSchedulerStatus(
         enabled_by_env=True,
-        running=True,
+        running=False,
         message=(
-            "Daily automation is handled by GitHub Actions. Render Free hosts "
-            "the review UI and may sleep when idle."
+            "External scheduler mode is configured. Render worker heartbeat is not available."
         ),
     )
 
@@ -173,6 +174,21 @@ def get_cloud_worker_status(database_path=DATABASE_PATH) -> AppSchedulerStatus:
         running=is_fresh and str(row["status"]) in {"idle", "running"},
         message=str(row["message"] or "Cloud scheduler heartbeat received."),
     )
+
+
+def get_worker_state(database_path=DATABASE_PATH) -> dict[str, object] | None:
+    try:
+        with closing(get_connection(database_path)) as connection:
+            row = connection.execute(
+                """
+                SELECT status, message, worker_id, last_heartbeat_at, updated_at
+                FROM automation_worker_state
+                WHERE id = 1
+                """
+            ).fetchone()
+    except sqlite3.Error:
+        return None
+    return dict(row) if row else None
 
 
 def _scheduler_loop() -> None:
@@ -218,6 +234,7 @@ def queue_due_runs(
     database_path=DATABASE_PATH,
 ) -> list[str]:
     initialize_database(database_path)
+    mark_stale_running_jobs(database_path)
     with closing(get_connection(database_path)) as connection:
         try:
             reconcile_automation_run_history(connection)
@@ -291,6 +308,7 @@ def queue_scheduled_run(
 
 def claim_next_queued_run(database_path=DATABASE_PATH) -> tuple[str, str] | None:
     initialize_database(database_path)
+    mark_stale_running_jobs(database_path)
     with closing(get_connection(database_path)) as connection:
         try:
             connection.execute("BEGIN IMMEDIATE")
@@ -319,6 +337,9 @@ def claim_next_queued_run(database_path=DATABASE_PATH) -> tuple[str, str] | None
                     started_at = CURRENT_TIMESTAMP,
                     finished_at = NULL,
                     error_message = NULL,
+                    current_phase = 'queued',
+                    current_source = NULL,
+                    heartbeat_at = CURRENT_TIMESTAMP,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE schedule_key = ? AND status = 'queued'
                 """,
@@ -339,11 +360,11 @@ def requeue_interrupted_worker_runs(database_path=DATABASE_PATH) -> int:
         updated = connection.execute(
             """
             UPDATE automation_run_history
-            SET status = 'queued',
-                run_id = NULL,
-                started_at = NULL,
-                finished_at = NULL,
-                error_message = 'Cloud worker restarted; run returned to the queue.',
+            SET status = 'recovered',
+                finished_at = CURRENT_TIMESTAMP,
+                error_message = 'Cloud worker restarted before this run finished; run marked recovered so it cannot stay Running forever.',
+                current_phase = COALESCE(current_phase, 'worker_restart'),
+                heartbeat_at = CURRENT_TIMESTAMP,
                 updated_at = CURRENT_TIMESTAMP
             WHERE status = 'running'
             """
@@ -375,6 +396,111 @@ def record_worker_heartbeat(
                 updated_at = CURRENT_TIMESTAMP
             """,
             (status, message, worker_id),
+        )
+        connection.commit()
+
+
+def mark_stale_running_jobs(database_path=DATABASE_PATH) -> int:
+    initialize_database(database_path)
+    heartbeat_timeout = max(
+        60,
+        int(os.getenv("AD_DOCTOR_WORKER_STALE_SECONDS", str(WORKER_HEARTBEAT_STALE_SECONDS))),
+    )
+    job_timeout = max(
+        heartbeat_timeout,
+        int(os.getenv("AD_DOCTOR_JOB_TIMEOUT_SECONDS", str(DEFAULT_JOB_TIMEOUT_SECONDS))),
+    )
+    heartbeat_modifier = f"-{heartbeat_timeout} seconds"
+    job_modifier = f"-{job_timeout} seconds"
+    with closing(get_connection(database_path)) as connection:
+        updated = connection.execute(
+            """
+            UPDATE automation_run_history
+            SET status = 'timed_out',
+                error_message = COALESCE(
+                    error_message,
+                    'Run timed out because the worker heartbeat stopped or the job exceeded the configured maximum runtime.'
+                ),
+                finished_at = COALESCE(finished_at, CURRENT_TIMESTAMP),
+                current_phase = COALESCE(current_phase, 'timed_out'),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE status = 'running'
+              AND started_at IS NOT NULL
+              AND (
+                    datetime(started_at) < datetime('now', ?)
+                 OR (
+                        heartbeat_at IS NOT NULL
+                    AND datetime(heartbeat_at) < datetime('now', ?)
+                    )
+                 OR (
+                        heartbeat_at IS NULL
+                    AND datetime(started_at) < datetime('now', ?)
+                    )
+              )
+            """,
+            (job_modifier, heartbeat_modifier, heartbeat_modifier),
+        ).rowcount
+        connection.commit()
+    return int(updated)
+
+
+def update_run_progress(
+    schedule_key: str,
+    *,
+    database_path=DATABASE_PATH,
+    current_phase: str | None = None,
+    current_source: str | None = None,
+    total_sources: int | None = None,
+    completed_sources: int | None = None,
+    failed_sources: int | None = None,
+    articles_scanned: int | None = None,
+    qualified_topics: int | None = None,
+    social_drafts_created: int | None = None,
+    blog_drafts_created: int | None = None,
+    research_calls: int | None = None,
+    tracked_tokens: int | None = None,
+    estimated_credits: int | None = None,
+    worker_id: str | None = None,
+) -> None:
+    values: list[object] = []
+    nullable_fields = {
+        "current_phase": current_phase,
+        "current_source": current_source,
+        "worker_id": worker_id,
+    }
+    numeric_fields = {
+        "total_sources": total_sources,
+        "completed_sources": completed_sources,
+        "failed_sources": failed_sources,
+        "articles_scanned": articles_scanned,
+        "qualified_topics": qualified_topics,
+        "social_drafts_created": social_drafts_created,
+        "blog_drafts_created": blog_drafts_created,
+        "research_calls": research_calls,
+        "tracked_tokens": tracked_tokens,
+        "estimated_credits": estimated_credits,
+    }
+    assignments = []
+    for column, value in nullable_fields.items():
+        if value is not None:
+            assignments.append(f"{column} = ?")
+            values.append(value)
+    for column, value in numeric_fields.items():
+        if value is not None:
+            assignments.append(f"{column} = ?")
+            values.append(int(value))
+    assignments.extend(["heartbeat_at = CURRENT_TIMESTAMP", "updated_at = CURRENT_TIMESTAMP"])
+    if not assignments:
+        return
+    values.append(schedule_key)
+    with closing(get_connection(database_path)) as connection:
+        connection.execute(
+            f"""
+            UPDATE automation_run_history
+            SET {', '.join(assignments)}
+            WHERE schedule_key = ?
+            """,
+            tuple(values),
         )
         connection.commit()
 
@@ -473,39 +599,101 @@ def run_claimed_schedule(
     database_path=DATABASE_PATH,
 ) -> bool:
     run_id = datetime.now(UTC).strftime("auto_%Y%m%d_%H%M%S")
+    worker_id = os.getenv("RENDER_INSTANCE_ID") or os.getenv("AD_DOCTOR_WORKER_ID") or "local-worker"
+    source_progress = {
+        "total_sources": 0,
+        "completed_sources": 0,
+        "failed_sources": 0,
+        "articles_scanned": 0,
+    }
     with closing(get_connection(database_path)) as connection:
         connection.execute(
             """
             UPDATE automation_run_history
-            SET run_id = ?, updated_at = CURRENT_TIMESTAMP
+            SET run_id = ?,
+                status = 'running',
+                current_phase = 'daily_automation',
+                current_source = NULL,
+                worker_id = ?,
+                heartbeat_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
             WHERE schedule_key = ?
             """,
-            (run_id, schedule_key),
+            (run_id, worker_id, schedule_key),
         )
         connection.commit()
+
+    def progress_callback(event: dict[str, object]) -> None:
+        event_type = str(event.get("event_type") or "")
+        phase = str(event.get("phase") or "")
+        source_name = str(event.get("source_name") or "") or None
+        if not source_name and phase and phase != "phase_3_article_fetch":
+            source_name = ""
+        if event.get("total_sources") is not None:
+            source_progress["total_sources"] = int(event.get("total_sources") or 0)
+        if event.get("completed_sources") is not None:
+            source_progress["completed_sources"] = int(event.get("completed_sources") or 0)
+        if event_type in {"source_failed", "source_timed_out"}:
+            source_progress["failed_sources"] += 1
+        if event_type == "source_complete" and event.get("candidates_checked") is not None:
+            source_progress["articles_scanned"] += int(event.get("candidates_checked") or 0)
+        update_run_progress(
+            schedule_key,
+            database_path=database_path,
+            current_phase=phase or ("phase_3_article_fetch" if event_type else "daily_automation"),
+            current_source=source_name,
+            total_sources=source_progress["total_sources"],
+            completed_sources=source_progress["completed_sources"],
+            failed_sources=source_progress["failed_sources"],
+            articles_scanned=source_progress["articles_scanned"],
+            worker_id=worker_id,
+        )
+
     try:
         summary = run_real_pipeline(
             database_path=database_path,
             fetch_source_time_budget_seconds=settings.fetch_source_time_budget_seconds,
             run_id=run_id,
+            progress_callback=progress_callback,
         )
         notification_summary = (
             notify_daily_scrape_complete(summary, database_path=database_path)
             if settings.notify_on_success
             else None
         )
+        usage = get_research_usage_for_run(summary.run_id, database_path=database_path)
         with closing(get_connection(database_path)) as connection:
             connection.execute(
                 """
                 UPDATE automation_run_history
                 SET run_id = ?,
                     status = 'complete',
+                    current_phase = 'complete',
+                    current_source = NULL,
+                    articles_scanned = ?,
+                    qualified_topics = ?,
+                    social_drafts_created = ?,
+                    blog_drafts_created = ?,
+                    research_calls = ?,
+                    tracked_tokens = ?,
+                    estimated_credits = ?,
+                    heartbeat_at = CURRENT_TIMESTAMP,
                     finished_at = CURRENT_TIMESTAMP,
                     error_message = NULL,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE schedule_key = ?
                 """,
-                (summary.run_id, schedule_key),
+                (
+                    summary.run_id,
+                    summary.articles_seen,
+                    summary.qualified_topics,
+                    summary.social_drafts,
+                    summary.blog_drafts,
+                    usage["research_calls"],
+                    usage["tracked_tokens"],
+                    usage["estimated_credits"],
+                    schedule_key,
+                ),
             )
             log_run_event(
                 connection,
@@ -545,8 +733,10 @@ def run_claimed_schedule(
             connection.execute(
                 """
                 UPDATE automation_run_history
-                SET status = 'error',
+                SET status = 'failed',
                     error_message = ?,
+                    current_phase = COALESCE(current_phase, 'failed'),
+                    heartbeat_at = CURRENT_TIMESTAMP,
                     finished_at = CURRENT_TIMESTAMP,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE schedule_key = ?
@@ -573,7 +763,46 @@ def run_claimed_schedule(
         return False
 
 
+def get_research_usage_for_run(run_id: str, database_path=DATABASE_PATH) -> dict[str, int]:
+    with closing(get_connection(database_path)) as connection:
+        rows = connection.execute(
+            """
+            SELECT rd.dossier_json
+            FROM research_dossiers rd
+            JOIN locked_topics lt ON lt.id = rd.locked_topic_id
+            WHERE lt.run_id = ?
+            """,
+            (run_id,),
+        ).fetchall()
+    research_calls = 0
+    tracked_tokens = 0
+    for row in rows:
+        try:
+            payload = json.loads(row["dossier_json"] or "{}")
+        except (TypeError, ValueError):
+            payload = {}
+        research_payload = payload.get("perplexity_research") if isinstance(payload, dict) else None
+        if not isinstance(research_payload, dict):
+            continue
+        if research_payload.get("status") == "completed":
+            research_calls += 1
+        usage = research_payload.get("usage")
+        if isinstance(usage, dict):
+            tracked_tokens += int(
+                usage.get("total_tokens")
+                or usage.get("total")
+                or usage.get("tokens")
+                or 0
+            )
+    return {
+        "research_calls": research_calls,
+        "tracked_tokens": tracked_tokens,
+        "estimated_credits": research_calls,
+    }
+
+
 def list_automation_run_history(limit: int = 25, database_path=DATABASE_PATH) -> list[dict[str, object]]:
+    mark_stale_running_jobs(database_path)
     with closing(get_connection(database_path)) as connection:
         rows = connection.execute(
             """
@@ -583,28 +812,24 @@ def list_automation_run_history(limit: int = 25, database_path=DATABASE_PATH) ->
                 scheduled_time,
                 timezone,
                 run_id,
-                CASE
-                    WHEN status = 'running'
-                     AND started_at IS NOT NULL
-                     AND datetime(started_at) < datetime('now', '-6 hours')
-                    THEN 'error'
-                    ELSE status
-                END AS status,
-                CASE
-                    WHEN status = 'running'
-                     AND started_at IS NOT NULL
-                     AND datetime(started_at) < datetime('now', '-6 hours')
-                    THEN COALESCE(error_message, 'Run was interrupted before completion.')
-                    ELSE error_message
-                END AS error_message,
+                status,
+                error_message,
+                current_phase,
+                current_source,
+                total_sources,
+                completed_sources,
+                failed_sources,
+                articles_scanned,
+                qualified_topics,
+                social_drafts_created,
+                blog_drafts_created,
+                research_calls,
+                tracked_tokens,
+                estimated_credits,
+                heartbeat_at,
+                worker_id,
                 started_at,
-                CASE
-                    WHEN status = 'running'
-                     AND started_at IS NOT NULL
-                     AND datetime(started_at) < datetime('now', '-6 hours')
-                    THEN COALESCE(finished_at, CURRENT_TIMESTAMP)
-                    ELSE finished_at
-                END AS finished_at,
+                finished_at,
                 (
                     SELECT rl.message
                     FROM run_logs rl
@@ -632,9 +857,10 @@ def reconcile_automation_run_history(connection) -> None:
     connection.execute(
         """
         UPDATE automation_run_history
-        SET status = 'error',
-            error_message = COALESCE(error_message, 'Run was interrupted before completion.'),
+        SET status = 'timed_out',
+            error_message = COALESCE(error_message, 'Run timed out before completion.'),
             finished_at = COALESCE(finished_at, CURRENT_TIMESTAMP),
+            heartbeat_at = COALESCE(heartbeat_at, CURRENT_TIMESTAMP),
             updated_at = CURRENT_TIMESTAMP
         WHERE status = 'running'
           AND started_at IS NOT NULL
@@ -668,14 +894,17 @@ def reconcile_automation_run_history(connection) -> None:
             SET status = ?,
                 error_message = CASE WHEN ? = 'error' THEN ? ELSE NULL END,
                 finished_at = ?,
+                current_phase = ?,
+                heartbeat_at = COALESCE(heartbeat_at, CURRENT_TIMESTAMP),
                 updated_at = CURRENT_TIMESTAMP
             WHERE schedule_key = ?
             """,
             (
-                event["event_type"],
+                "failed" if event["event_type"] == "error" else "complete",
                 event["event_type"],
                 event["message"],
                 event["created_at"],
+                event["event_type"],
                 row["schedule_key"],
             ),
         )

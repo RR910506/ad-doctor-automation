@@ -1,60 +1,65 @@
-# Render Free Deployment Guide
+# Render Production Deployment Guide
 
-This project supports a no-paid-Render setup:
+Ad Doctor production now uses an always-on Render service that starts two separate processes:
 
-- Render Free hosts the Streamlit review UI.
-- GitHub Actions runs the daily automation on a schedule.
-- Generated drafts are created as Google Docs and indexed in a Google Sheet.
-- The Render UI reads drafts from Google Sheets/Docs.
+- Streamlit web UI for Dashboard, Content Studio, Control Room, and Arsenal.
+- Scheduler worker for queued daily automation runs and worker heartbeats.
 
-This design is required because Render Free web services sleep after idle time and cannot attach persistent disks.
+This keeps the UI independent from the scheduler loop while allowing both processes to share one SQLite database on the same Render persistent disk.
 
-## Current Free Architecture
+## Production Architecture
 
 - Render service type: Web Service.
-- Render instance type: Free.
+- Render instance type: Starter or higher.
 - Render root directory: `ad_doctor`.
 - Render start command:
 
 ```bash
-streamlit run app.py --server.address 0.0.0.0 --server.port $PORT --server.headless true --browser.gatherUsageStats false
+python start_render.py
 ```
 
-- Daily runner: `.github/workflows/daily-ad-doctor.yml`.
-- Database path: `ad_doctor/database/ad_doctor.db` for pipeline working cache only.
-- Draft store: Google Docs/Sheets.
-- Scheduler mode: `external`.
+- Database path:
+
+```text
+/opt/render/project/src/ad_doctor_data/ad_doctor.db
+```
+
+- Persistent disk:
+
+```text
+name: ad-doctor-data
+mountPath: /opt/render/project/src/ad_doctor_data
+sizeGB: 1
+```
+
+- Scheduler mode:
+
+```text
+AD_DOCTOR_SCHEDULER_MODE=worker
+```
+
+The web process does not run the scheduler loop. The separate `src.scheduler_worker` process queues every saved timestamp, runs one automation at a time, writes heartbeat/progress fields, and marks interrupted runs as recovered or timed out.
 
 ## Required Render Environment Variables
 
 Set these in Render:
 
 ```text
-AD_DOCTOR_DATABASE_PATH=database/ad_doctor.db
+AD_DOCTOR_DATABASE_PATH=/opt/render/project/src/ad_doctor_data/ad_doctor.db
 AD_DOCTOR_DRAFT_STORE=google
-AD_DOCTOR_CLEAR_SQLITE_GENERATED_DATA_FOR_GOOGLE=1
+AD_DOCTOR_CLEAR_SQLITE_GENERATED_DATA_FOR_GOOGLE=0
 AD_DOCTOR_APP_SCHEDULER_ENABLED=0
-AD_DOCTOR_SCHEDULER_MODE=external
+AD_DOCTOR_SCHEDULER_MODE=worker
+AD_DOCTOR_SCHEDULER_POLL_SECONDS=30
+AD_DOCTOR_SCHEDULER_CATCHUP_HOURS=24
+AD_DOCTOR_WORKER_STALE_SECONDS=900
+AD_DOCTOR_JOB_TIMEOUT_SECONDS=10800
 PERPLEXITY_MODEL=sonar-pro
 PERPLEXITY_ENDPOINT=https://api.perplexity.ai/v1/sonar
 GOOGLE_DRAFTS_WORKSHEET_NAME=Drafts
 ```
 
-Optional in Render:
-
-```text
-PERPLEXITY_API_KEY=your_key_here
-OPENROUTER_API_KEY=your_key_here_if_used
-GOOGLE_SERVICE_ACCOUNT_JSON=your_service_account_json
-GOOGLE_DRAFTS_SPREADSHEET_ID=your_google_sheet_id
-GOOGLE_DRAFTS_FOLDER_ID=your_google_drive_folder_id
-```
-
-The daily GitHub Action needs the same provider secrets to generate higher-quality research-backed drafts.
-
-## Required GitHub Secrets
-
-In GitHub, open the repository settings and add:
+Set these secrets when available:
 
 ```text
 PERPLEXITY_API_KEY
@@ -62,78 +67,55 @@ OPENROUTER_API_KEY
 GOOGLE_SERVICE_ACCOUNT_JSON
 GOOGLE_DRAFTS_SPREADSHEET_ID
 GOOGLE_DRAFTS_FOLDER_ID
+AD_DOCTOR_SMTP_HOST
+AD_DOCTOR_SMTP_USERNAME
+AD_DOCTOR_SMTP_PASSWORD
+AD_DOCTOR_SMTP_FROM
 ```
 
-Optional:
+If `PERPLEXITY_API_KEY` is missing, AI research is disabled and the app clearly shows that it is using local approved-source synthesis only.
 
-```text
-RENDER_DEPLOY_HOOK_URL
-```
+## Render Blueprint Steps
 
-If `RENDER_DEPLOY_HOOK_URL` is set, the daily workflow triggers Render after committing new database changes. If it is not set, Render must have auto-deploy enabled for the `main` branch.
-
-## GitHub Actions Schedule
-
-The workflow runs daily at:
-
-```text
-03:45 UTC = 09:15 Asia/Kolkata
-```
-
-The app default schedule is `09:00 Asia/Kolkata`, so this gives the scheduled slot time to become due before the workflow claims it.
-
-You can also run it manually from GitHub:
-
-```text
-Actions -> Daily Ad Doctor Automation -> Run workflow
-```
-
-## Non-Developer Render Steps
-
-1. Open Render and sign in.
-2. Click `New`.
-3. Choose `Blueprint`.
-4. Connect the GitHub repository `RR910506/ad-doctor-automation`.
-5. Select branch `main`.
-6. Render should detect `render.yaml` at the repository root.
-7. Confirm the service named `ad-doctor`.
-8. Choose the Free instance type if Render asks.
-9. Add the environment variables listed above.
-10. Deploy the Blueprint.
-11. Make sure auto-deploy from `main` is enabled, or add a deploy hook URL to GitHub as `RENDER_DEPLOY_HOOK_URL`.
+1. Open Render.
+2. Choose `New` -> `Blueprint`.
+3. Connect `RR910506/ad-doctor-automation`.
+4. Select branch `main`.
+5. Render should detect `render.yaml`.
+6. Confirm the `ad-doctor` service.
+7. Keep the Starter plan or higher.
+8. Confirm the persistent disk.
+9. Add the required environment variables and secrets.
+10. Deploy.
 
 ## Manual Web Service Settings
 
-If you do not use Blueprint, create a Web Service manually:
+If not using Blueprint:
 
 ```text
 Repository: RR910506/ad-doctor-automation
 Branch: main
 Root Directory: ad_doctor
 Runtime: Python
-Instance Type: Free
+Instance Type: Starter or higher
 Build Command: pip install --upgrade pip && pip install -r requirements.txt
-Start Command: streamlit run app.py --server.address 0.0.0.0 --server.port $PORT --server.headless true --browser.gatherUsageStats false
+Start Command: python start_render.py
 Health Check Path: /_stcore/health
+Persistent Disk: /opt/render/project/src/ad_doctor_data
 ```
 
-## Important Free-Plan Limits
+## Production Checks
 
-- Render Free services sleep after idle time.
-- Render Free services cannot use persistent disks.
-- UI changes made while the app is running can be lost after sleep or redeploy because the database is repo-backed.
-- Daily generated drafts are persisted in your Google Docs/Sheets account.
-- Some source sites may block datacenter traffic with `403 Forbidden`; those sources will be logged as failures while other sources continue.
-- Render Free blocks outbound SMTP ports such as `587`, so email alerts should not be treated as reliable on Free Render.
+After deployment, verify:
 
-## Paid Upgrade Path
+- Dashboard worker status shows `Healthy`.
+- Dashboard last heartbeat is recent.
+- Control Room shows `Scheduler mode: Worker`.
+- Saved `09:00 Asia/Kolkata` run appears in upcoming triggers.
+- Old Google-backed Content Studio batches still appear.
+- Missing Perplexity/OpenRouter keys show `AI research disabled`.
+- Arsenal shows source start, source complete, source failed, and source timed out events with expandable metadata.
 
-If you later move to a paid Render plan, use the older always-on worker design:
+## PostgreSQL Upgrade Note
 
-- Set `plan: starter`.
-- Add a persistent disk at `/opt/render/project/src/ad_doctor_data`.
-- Set `AD_DOCTOR_DATABASE_PATH=/opt/render/project/src/ad_doctor_data/ad_doctor.db`.
-- Set `AD_DOCTOR_SCHEDULER_MODE=worker`.
-- Use `startCommand: python start_render.py`.
-
-That paid setup allows approvals and generated data to persist directly on Render without GitHub Actions committing the database.
+This setup intentionally keeps web and worker processes inside the same Render service so SQLite can stay safe on one persistent disk. If you later want a physically separate Render Worker service, migrate the shared state database to PostgreSQL first because Render persistent disks are not shared across services.

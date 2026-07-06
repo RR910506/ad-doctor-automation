@@ -131,8 +131,32 @@ def fetch_articles(
                     if time.monotonic() - source_started_at > source_time_budget_seconds:
                         message = f"Stopped source {source_name} after {source_time_budget_seconds}s budget; kept {valid_articles_for_source} valid article(s)."
                         messages.append(message)
-                        log_run_event(connection, run_id, "phase_3_article_fetch", "warning", message, auto_commit=True)
-                        emit_progress(progress_callback, "warning", message, {"source_name": source_name})
+                        log_run_event(
+                            connection,
+                            run_id,
+                            "phase_3_article_fetch",
+                            "source_timed_out",
+                            message,
+                            json.dumps(
+                                {
+                                    "source_id": source["id"],
+                                    "source_name": source_name,
+                                    "valid_articles": valid_articles_for_source,
+                                    "elapsed_seconds": round(time.monotonic() - source_started_at, 2),
+                                }
+                            ),
+                            auto_commit=True,
+                        )
+                        emit_progress(
+                            progress_callback,
+                            "source_timed_out",
+                            message,
+                            {
+                                "source_name": source_name,
+                                "valid_articles": valid_articles_for_source,
+                                "elapsed_seconds": round(time.monotonic() - source_started_at, 2),
+                            },
+                        )
                         break
                     articles_seen += 1
                     source_seen += 1
@@ -172,8 +196,16 @@ def fetch_articles(
                 failed += 1
                 message = f"Failed source {source_name}: {exc}"
                 messages.append(message)
-                log_run_event(connection, run_id, "phase_3_article_fetch", "error", message, auto_commit=True)
-                emit_progress(progress_callback, "error", message, {"source_name": source_name})
+                log_run_event(
+                    connection,
+                    run_id,
+                    "phase_3_article_fetch",
+                    "source_failed",
+                    message,
+                    json.dumps({"source_id": source["id"], "source_name": source_name}),
+                    auto_commit=True,
+                )
+                emit_progress(progress_callback, "source_failed", message, {"source_name": source_name})
             finally:
                 elapsed_seconds = round(time.monotonic() - source_started_at, 2)
                 source_complete_message = (
