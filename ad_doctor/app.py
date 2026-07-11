@@ -1419,7 +1419,10 @@ def get_ai_research_status() -> dict[str, object]:
     return {
         "enabled": False,
         "engine": engine["label"],
-        "message": "AI research disabled - Perplexity/OpenRouter API key missing.",
+        "message": (
+            "AI research disabled - using approved-source local synthesis. "
+            "Content can still be created from qualified scraped coverage."
+        ),
     }
 
 
@@ -2266,6 +2269,7 @@ def render_structured_social_draft(draft: dict[str, object]) -> None:
             "Qualification Status",
             "Sources Count",
             "Sources Used",
+            "Research Summary",
             "Perplexity Research Summary",
             "Core Strategic Insight",
             "Selected Content Pillar",
@@ -2318,6 +2322,7 @@ def parse_structured_social_draft(draft_markdown: str) -> dict[str, object] | No
             "Qualification Status",
             "Sources Count",
             "Sources Used",
+            "Research Summary",
             "Perplexity Research Summary",
             "Core Strategic Insight",
             "Selected Content Pillar",

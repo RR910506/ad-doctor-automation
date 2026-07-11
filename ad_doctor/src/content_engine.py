@@ -225,32 +225,77 @@ def read_template(template_path) -> str:
 
 
 def build_blog_draft(dossier: dict[str, object], dissection_markdown: str, template_text: str) -> str:
-    topic = dossier.get("topic", "Untitled campaign topic")
-    references = "\n".join(f"- {url}" for url in dossier.get("source_urls", [])) or "- No source URLs available."
+    topic = str(dossier.get("topic") or "Untitled campaign topic")
+    reference_articles = select_topic_reference_articles(dossier)
+    source_names = [str(article.get("source_name")) for article in reference_articles if article.get("source_name")]
+    references = format_reference_articles(reference_articles)
+    if references == "No topic-specific source URLs available.":
+        references = "\n".join(f"- {url}" for url in dossier.get("source_urls", [])) or "- No source URLs available."
+    evidence_text = build_evidence_text(dossier, dissection_markdown, reference_articles)
+    pillar = infer_content_pillar(topic, dossier, evidence_text)
+    core_insight = build_core_insight(dossier, evidence_text, pillar)
+    consumer_analysis = build_signal_analysis(
+        evidence_text,
+        CONSUMER_BEHAVIOR_SIGNALS,
+        "consumer behavior",
+        "The consumer behavior shift needs stronger evidence before making a definitive claim.",
+    )
+    cultural_analysis = build_signal_analysis(
+        evidence_text,
+        CULTURE_SIGNALS,
+        "culture",
+        "The cultural force is not directly named in stored coverage, so treat this as a hypothesis.",
+    )
+    marketing_analysis = build_marketing_analysis(pillar, dossier)
+    doctor_verdict = build_doctor_verdict(pillar, dossier, core_insight)
+    prescription = build_marketing_prescription(pillar, dossier, consumer_analysis)
     template_note = build_template_note(template_text, "blog")
     return f"""# {topic}
 
 {template_note}
 
-## Why This Matters
-{dossier.get("market_context", "Market context to be confirmed.")}
+## Content Engine
+Approved-source Ad Doctor framework generator. Perplexity is not required for this draft.
 
-## Campaign Snapshot
+## Qualification
+- Status: {"Qualified" if count_unique_sources(reference_articles) >= 3 else "Needs review"}
+- Sources count: {count_unique_sources(reference_articles)}
+- Sources used: {format_source_names(source_names)}
+- Research mode: {get_research_mode_label(dossier)}
+
+## Approved-Source Intelligence Summary
+{build_content_research_summary(dossier, reference_articles)}
+
+## Why This Matters
+{build_why_topic_matters(pillar, dossier, core_insight)}
+
+## Topic Snapshot
 - Brand: {dossier.get("brand_details", "To be confirmed")}
 - Campaign: {dossier.get("campaign_name", "To be confirmed")}
 - Platforms: {", ".join(dossier.get("media_platform_usage", [])) or "To be confirmed"}
+- Content pillar: {pillar}
 
-## Strategic Breakdown
-{dossier.get("strategic_insight", "Strategic insight to be confirmed.")}
+## Diagnostic Layers
+### Business
+{summarize_claim(clean_context_or_default(dossier, "market_context", "The business context is not strongly confirmed in stored coverage yet."), 320)}
 
-## Creative Breakdown
-{dossier.get("creative_idea", "Creative idea to be confirmed.")}
+### Marketing
+{paragraph_from_analysis(marketing_analysis, limit=420)}
 
-## Execution Notes
-{dossier.get("execution", "Execution details to be confirmed.")}
+### Consumer
+{consumer_analysis}
 
-## Draft CTA
-What marketers can learn: watch how the campaign connects cultural context, creative idea, and platform execution before judging the output.
+### Culture
+{cultural_analysis}
+
+## Doctor's Verdict
+{doctor_verdict}
+
+## Marketing Prescription
+{prescription}
+
+## Fact Discipline
+Article facts come from approved-source coverage. Ad Doctor diagnosis is interpretation. If data is unavailable, the draft must say data unavailable instead of inventing numbers.
 
 ## Source References
 {references}
@@ -340,7 +385,7 @@ def build_social_draft(
             "Qualification Status: Qualified",
             f"Sources Count: {coverage_count}",
             "Sources Used: " + format_source_names(source_names),
-            "Perplexity Research Summary:\n" + build_perplexity_research_summary(dossier),
+            "Research Summary:\n" + build_content_research_summary(dossier, reference_articles),
             "Core Strategic Insight:\n" + strategic_insight,
             "Selected Content Pillar: " + pillar,
             "Framework Used: " + get_framework_name(framework_settings),
@@ -378,7 +423,7 @@ def build_rejected_social_draft(
             "Qualification Status: Not Qualified",
             f"Sources Count: {coverage_count}",
             "Sources Used: Not enough exact-topic approved sources.",
-            "Perplexity Research Summary: Not requested because this topic failed qualification.",
+            "Research Summary: Not requested because this topic failed qualification.",
             "Core Strategic Insight: Do not create content for topics with fewer than 3 exact-topic approved sources.",
             "Decision: Do not publish. Wait until more credible approved-source coverage is available.",
             "Fact-check Notes:\n" + reason,
@@ -394,15 +439,55 @@ def get_perplexity_research(dossier: dict[str, object]) -> dict[str, object]:
 
 
 def build_perplexity_research_summary(dossier: dict[str, object]) -> str:
+    return build_content_research_summary(dossier, select_topic_reference_articles(dossier))
+
+
+def build_content_research_summary(
+    dossier: dict[str, object],
+    reference_articles: list[dict[str, object]] | None = None,
+) -> str:
+    reference_articles = reference_articles or select_topic_reference_articles(dossier)
+    local_summary = build_approved_source_intelligence_summary(dossier, reference_articles)
     research = get_perplexity_research(dossier)
     summary = clean_research_value(research.get("summary"))
     status = str(research.get("status") or "not_available")
-    if summary:
-        return f"{summary}\n\nResearch status: {status}."
+    if status == "completed" and summary:
+        return f"{local_summary}\n\nAI research add-on: {summary}\n\nResearch status: completed."
     return (
-        "Perplexity research not available for this draft; using exact-topic approved-source "
+        f"{local_summary}\n\n"
+        "AI research add-on: unavailable. The content engine is using exact-topic approved-source "
         f"coverage only.\n\nResearch status: {status}."
     )
+
+
+def build_approved_source_intelligence_summary(
+    dossier: dict[str, object],
+    reference_articles: list[dict[str, object]],
+) -> str:
+    topic = str(dossier.get("topic") or "Untitled topic")
+    source_names = [str(article.get("source_name") or article.get("article_url") or "") for article in reference_articles]
+    headlines = top_reference_headlines(reference_articles, limit=4)
+    event_copy = build_verified_event_copy(topic, reference_articles)
+    data_points = format_verified_data_points(get_verified_data_points(dossier))
+    return "\n".join(
+        [
+            f"Research mode: {get_research_mode_label(dossier)}.",
+            build_source_evidence_summary(reference_articles),
+            f"Confirmed event: {event_copy}",
+            f"Source signal: {'; '.join(headlines) if headlines else 'Headline detail unavailable.'}",
+            f"Sources used: {format_source_names(source_names)}.",
+            f"Verified data: {data_points}.",
+            "Boundary: no external web research was used unless AI research status says completed.",
+        ]
+    )
+
+
+def get_research_mode_label(dossier: dict[str, object]) -> str:
+    research = get_perplexity_research(dossier)
+    status = str(research.get("status") or "").lower()
+    if status == "completed":
+        return "Perplexity-augmented approved-source synthesis"
+    return "Approved-source local synthesis"
 
 
 def build_core_strategic_insight(dossier: dict[str, object], local_core_insight: str) -> str:
@@ -574,8 +659,8 @@ def build_risk_notes(dossier: dict[str, object]) -> str:
     research = get_perplexity_research(dossier)
     status = str(research.get("status") or "not_available")
     risks = [
-        f"Perplexity research status: {status}.",
-        "If status is unavailable or error, copywriter should treat external context as limited and verify before publishing.",
+        f"AI research status: {status}.",
+        "If status is unavailable or error, the draft is based only on approved-source local synthesis.",
         "Do not use unrelated source links to strengthen the story.",
         "If a claim sounds like brand intent, keep it framed as Ad Doctor interpretation unless source coverage confirms it.",
     ]
@@ -1249,7 +1334,7 @@ def build_carousel(
                 f"Before this move, the pressure point was: {problem_context}",
                 "That is why Ad Doctor treats it as a market diagnosis, not a news recap.",
             ),
-            "source": build_slide_source(reference_articles, "Context from approved coverage plus research synthesis."),
+            "source": build_slide_source(reference_articles, "Context from approved coverage and local framework synthesis."),
             "role": "problem context",
             "data_used": False,
         },
@@ -1289,7 +1374,7 @@ def build_carousel(
                 f"The strategic reason: {marketing_lesson}",
                 f"Culture/platform layer: {cultural_context or summarize_claim(cultural_analysis, 180) or 'not strongly quantified yet.'}",
             ),
-            "source": build_slide_source(reference_articles, "Ad Doctor interpretation based on approved coverage and research."),
+            "source": build_slide_source(reference_articles, "Ad Doctor interpretation based on approved coverage."),
             "role": "why it worked",
             "data_used": False,
         },

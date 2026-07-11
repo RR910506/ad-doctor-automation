@@ -54,8 +54,6 @@ AD_DOCTOR_SCHEDULER_POLL_SECONDS=30
 AD_DOCTOR_SCHEDULER_CATCHUP_HOURS=24
 AD_DOCTOR_WORKER_STALE_SECONDS=900
 AD_DOCTOR_JOB_TIMEOUT_SECONDS=10800
-PERPLEXITY_MODEL=sonar-pro
-PERPLEXITY_ENDPOINT=https://api.perplexity.ai/v1/sonar
 OPENAI_MODEL=gpt-4.1-mini
 OPENAI_BASE_URL=https://api.openai.com/v1
 GOOGLE_DRAFTS_WORKSHEET_NAME=Drafts
@@ -64,7 +62,6 @@ GOOGLE_DRAFTS_WORKSHEET_NAME=Drafts
 Set these secrets when available:
 
 ```text
-PERPLEXITY_API_KEY
 OPENROUTER_API_KEY
 OPENAI_API_KEY
 GOOGLE_SERVICE_ACCOUNT_JSON
@@ -76,7 +73,7 @@ AD_DOCTOR_SMTP_PASSWORD
 AD_DOCTOR_SMTP_FROM
 ```
 
-If `PERPLEXITY_API_KEY` is missing, AI research is disabled and the app clearly shows that it is using local approved-source synthesis only.
+Perplexity is optional. If `PERPLEXITY_API_KEY` is missing, Ad Doctor still creates drafts using approved-source local synthesis from the scraped, qualified source cluster. The app clearly shows that AI research is disabled and content is based only on approved source coverage.
 
 If `OPENAI_API_KEY` is missing, ChatGPT writing is disabled and the app uses the local Ad Doctor framework generator.
 

@@ -32,12 +32,6 @@ services:
         value: "900"
       - key: AD_DOCTOR_JOB_TIMEOUT_SECONDS
         value: "10800"
-      - key: PERPLEXITY_API_KEY
-        sync: false
-      - key: PERPLEXITY_MODEL
-        value: sonar-pro
-      - key: PERPLEXITY_ENDPOINT
-        value: https://api.perplexity.ai/v1/sonar
       - key: OPENROUTER_API_KEY
         sync: false
       - key: OPENAI_API_KEY

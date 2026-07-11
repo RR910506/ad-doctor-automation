@@ -47,10 +47,16 @@ def build_research_dossiers(
         for locked_topic in locked_topics:
             context = get_locked_topic_context(connection, int(locked_topic["id"]))
             dossier = build_local_dossier(context)
-            research_payload = perplexity_research.research_topic_with_perplexity(
-                str(dossier.get("topic") or ""),
-                list(dossier.get("source_articles") or []),
-            )
+            if perplexity_research.ACTIVE_RESEARCH_PROVIDER == "approved_source_only":
+                research_payload = build_approved_source_only_research_payload(
+                    str(dossier.get("topic") or ""),
+                    list(dossier.get("source_articles") or []),
+                )
+            else:
+                research_payload = perplexity_research.research_topic_with_perplexity(
+                    str(dossier.get("topic") or ""),
+                    list(dossier.get("source_articles") or []),
+                )
             dossier["perplexity_research"] = research_payload
             if research_payload.get("status") == "completed":
                 dossier["research_mode"] = "perplexity_augmented"
@@ -92,6 +98,34 @@ def apply_saved_research_provider_settings(database_path=DATABASE_PATH) -> None:
     perplexity_research.PERPLEXITY_ENDPOINT = (
         str(settings.get("endpoint") or engine["endpoint"]).strip() or engine["endpoint"]
     )
+
+
+def build_approved_source_only_research_payload(
+    topic: str,
+    source_articles: list[dict[str, object]],
+) -> dict[str, object]:
+    source_names = sorted({str(article.get("source_name") or "Approved source") for article in source_articles})
+    source_links = sorted({str(article["article_url"]) for article in source_articles if article.get("article_url")})
+    evidence = ", ".join(source_names) if source_names else "no approved sources"
+    return {
+        "status": "approved_source_only",
+        "topic": topic,
+        "model": "local-approved-source-synthesis",
+        "summary": (
+            "External AI research is disabled. The content engine is using only exact-topic "
+            f"approved-source coverage. Evidence base: {len(source_names)} source(s): {evidence}."
+        ),
+        "background_context": "data unavailable",
+        "market_context": "data unavailable",
+        "consumer_shift": "data unavailable",
+        "brand_strategy": "data unavailable",
+        "competitor_context": "data unavailable",
+        "business_impact": "data unavailable",
+        "cultural_relevance": "data unavailable",
+        "marketing_lesson": "data unavailable",
+        "verified_data_points": [],
+        "source_links": source_links,
+    }
 
 
 def build_local_dossier(context: dict[str, object]) -> dict[str, object]:

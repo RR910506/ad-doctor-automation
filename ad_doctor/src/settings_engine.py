@@ -122,9 +122,9 @@ RESEARCH_ENGINE_OPTIONS: tuple[dict[str, str], ...] = (
 
 
 DEFAULT_RESEARCH_SETTINGS = {
-    "provider_key": "perplexity",
-    "model": "sonar-pro",
-    "endpoint": "https://api.perplexity.ai/v1/sonar",
+    "provider_key": "approved_source_only",
+    "model": "local-approved-source-synthesis",
+    "endpoint": "",
     "api_key": "",
 }
 

@@ -6,7 +6,7 @@ from pathlib import Path
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_DIR))
 
-from src.research_engine import build_local_dossier
+from src.research_engine import build_approved_source_only_research_payload, build_local_dossier
 import src.perplexity_research as perplexity_research
 
 
@@ -81,3 +81,23 @@ class ResearchEngineTest(unittest.TestCase):
         self.assertEqual(result["status"], "unavailable")
         self.assertIn("summary", result)
         self.assertIn("source_links", result)
+
+    def test_approved_source_only_payload_does_not_require_perplexity(self) -> None:
+        payload = build_approved_source_only_research_payload(
+            "Nike launches AI-powered Olympics campaign",
+            [
+                {
+                    "source_name": "Ad Age",
+                    "article_url": "https://example.com/nike-ai",
+                },
+                {
+                    "source_name": "The Drum",
+                    "article_url": "https://example.com/nike-ai-2",
+                },
+            ],
+        )
+
+        self.assertEqual(payload["status"], "approved_source_only")
+        self.assertEqual(payload["model"], "local-approved-source-synthesis")
+        self.assertIn("External AI research is disabled", payload["summary"])
+        self.assertIn("https://example.com/nike-ai", payload["source_links"])

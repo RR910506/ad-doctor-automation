@@ -6,7 +6,12 @@ from pathlib import Path
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_DIR))
 
-from src.content_engine import build_blog_draft, build_social_draft, infer_content_pillar
+from src.content_engine import (
+    build_blog_draft,
+    build_content_research_summary,
+    build_social_draft,
+    infer_content_pillar,
+)
 
 
 class ContentEngineTest(unittest.TestCase):
@@ -39,6 +44,9 @@ class ContentEngineTest(unittest.TestCase):
 
         self.assertIn("Nike launches", draft)
         self.assertIn("https://example.com/nike-ai", draft)
+        self.assertIn("Approved-source Ad Doctor framework generator", draft)
+        self.assertIn("Approved-Source Intelligence Summary", draft)
+        self.assertIn("Doctor's Verdict", draft)
 
     def test_build_social_draft_uses_ad_doctor_carousel_framework(self) -> None:
         draft = build_social_draft(
@@ -96,7 +104,7 @@ class ContentEngineTest(unittest.TestCase):
         self.assertIn("Qualification Status: Qualified", draft)
         self.assertIn("Sources Count: 3", draft)
         self.assertIn("Sources Used: Ad Age, Adweek, The Drum", draft)
-        self.assertIn("Perplexity Research Summary:", draft)
+        self.assertIn("Research Summary:", draft)
         self.assertIn("Core Strategic Insight:", draft)
         self.assertIn("Selected Content Pillar:", draft)
         self.assertIn("Carousel Draft:", draft)
@@ -117,6 +125,7 @@ class ContentEngineTest(unittest.TestCase):
         self.assertIn("Fact-check Notes:", draft)
         self.assertIn("Risk Notes:", draft)
         self.assertIn("Follow @the_ad_doctor for more marketing breakdowns.", draft)
+        self.assertIn("Research mode: Perplexity-augmented approved-source synthesis", draft)
         self.assertNotIn("On-slide copy", draft)
         self.assertNotIn("Why this slide exists", draft)
         self.assertNotIn("## SECTION", draft)
@@ -182,3 +191,76 @@ class ContentEngineTest(unittest.TestCase):
         self.assertIn("Qualification Status: Not Qualified", draft)
         self.assertIn("fewer than 3", draft)
         self.assertNotIn("Carousel Draft", draft)
+
+    def test_social_draft_creates_framework_content_without_perplexity(self) -> None:
+        draft = build_social_draft(
+            {
+                "topic": "Cannes Lions 2026 schedule, events and industry coverage",
+                "brand_details": "Cannes Lions",
+                "market_context": "Industry events are becoming planning moments for CMOs and agencies.",
+                "strategic_insight": "The schedule works as a map of where marketing attention is moving.",
+                "execution": "The coverage focuses on events, speakers, CMOs, creatives, and ad tech leaders.",
+                "performance_data": "No performance data found in stored source coverage.",
+                "source_articles": [
+                    {
+                        "source_name": "Adweek",
+                        "headline": "Cannes Lions 2026 schedule includes events for CMOs and creatives",
+                        "article_url": "https://example.com/cannes-lions-2026-schedule-adweek",
+                    },
+                    {
+                        "source_name": "The Drum",
+                        "headline": "Cannes Lions 2026 schedule and industry events for marketing leaders",
+                        "article_url": "https://example.com/cannes-lions-2026-schedule-drum",
+                    },
+                    {
+                        "source_name": "Ad Age",
+                        "headline": "Cannes Lions 2026 schedule covers CMOs creatives and ad tech leaders",
+                        "article_url": "https://example.com/cannes-lions-2026-schedule-adage",
+                    },
+                ],
+                "perplexity_research": {
+                    "status": "unavailable",
+                    "summary": "Perplexity API key not configured.",
+                    "verified_data_points": [],
+                },
+            },
+            "Dissection notes",
+            "# The Ad Doctor Social Media Carousel Framework",
+        )
+
+        self.assertIn("Qualification Status: Qualified", draft)
+        self.assertIn("Research Summary:", draft)
+        self.assertIn("Research mode: Approved-source local synthesis", draft)
+        self.assertIn("AI research add-on: unavailable", draft)
+        self.assertIn("Slide 1:", draft)
+        self.assertIn("Slide 8:", draft)
+        self.assertNotIn("Perplexity Research Summary:", draft)
+
+    def test_content_research_summary_uses_local_sources_when_ai_unavailable(self) -> None:
+        summary = build_content_research_summary(
+            {
+                "topic": "Nike launches AI-powered Olympics campaign",
+                "perplexity_research": {"status": "unavailable"},
+                "source_articles": [
+                    {
+                        "source_name": "Ad Age",
+                        "headline": "Nike launches AI-powered Olympics campaign",
+                        "article_url": "https://example.com/nike-ai",
+                    },
+                    {
+                        "source_name": "Adweek",
+                        "headline": "Nike launches AI-powered Olympics campaign for athletes",
+                        "article_url": "https://example.com/nike-ai-2",
+                    },
+                    {
+                        "source_name": "The Drum",
+                        "headline": "Nike launches AI-powered Olympics campaign ahead of the Games",
+                        "article_url": "https://example.com/nike-ai-3",
+                    },
+                ],
+            }
+        )
+
+        self.assertIn("Approved-source local synthesis", summary)
+        self.assertIn("AI research add-on: unavailable", summary)
+        self.assertIn("Ad Age, Adweek, The Drum", summary)

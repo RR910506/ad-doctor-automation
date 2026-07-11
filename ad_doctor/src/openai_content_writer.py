@@ -170,7 +170,11 @@ def build_writer_user_prompt(
         "topic": dossier.get("topic"),
         "source_urls": dossier.get("source_urls"),
         "source_articles": dossier.get("source_articles"),
-        "perplexity_research": dossier.get("perplexity_research"),
+        "research_payload": dossier.get("perplexity_research"),
+        "research_note": (
+            "Use research_payload only when its status is completed. "
+            "Otherwise rely on approved source_articles and the local draft."
+        ),
         "framework": framework_settings,
     }
     return "\n\n".join(
