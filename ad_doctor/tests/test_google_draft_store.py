@@ -89,7 +89,11 @@ class GoogleDraftStoreTest(unittest.TestCase):
                     self.assertEqual(connection.execute("SELECT COUNT(*) FROM articles").fetchone()[0], 1)
                     self.assertEqual(connection.execute("SELECT COUNT(*) FROM topics").fetchone()[0], 1)
                     self.assertEqual(connection.execute("SELECT COUNT(*) FROM content_outputs").fetchone()[0], 1)
-                    self.assertEqual(connection.execute("SELECT COUNT(*) FROM system_flags").fetchone()[0], 0)
+                    self.assertIsNone(
+                        connection.execute(
+                            "SELECT 1 FROM system_flags WHERE key = 'google_draft_store_generated_data_reset_v1'"
+                        ).fetchone()
+                    )
 
             finally:
                 if previous_mode is None:
@@ -157,7 +161,11 @@ class GoogleDraftStoreTest(unittest.TestCase):
                     self.assertEqual(connection.execute("SELECT COUNT(*) FROM sources").fetchone()[0], 1)
                     self.assertEqual(connection.execute("SELECT COUNT(*) FROM articles").fetchone()[0], 0)
                     self.assertEqual(connection.execute("SELECT COUNT(*) FROM topics").fetchone()[0], 0)
-                    self.assertEqual(connection.execute("SELECT COUNT(*) FROM system_flags").fetchone()[0], 1)
+                    self.assertIsNotNone(
+                        connection.execute(
+                            "SELECT 1 FROM system_flags WHERE key = 'google_draft_store_generated_data_reset_v1'"
+                        ).fetchone()
+                    )
             finally:
                 if previous_clear is None:
                     os.environ.pop("AD_DOCTOR_CLEAR_SQLITE_GENERATED_DATA_FOR_GOOGLE", None)

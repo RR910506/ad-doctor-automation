@@ -25,7 +25,7 @@ from src.app_scheduler import (
     start_app_scheduler,
 )
 from src.config import APP_NAME
-from src.article_fetcher import fetch_articles
+from src.article_fetcher import dedupe_sources, fetch_articles
 from src.content_engine import generate_content_outputs
 from src.coverage_backfill import expand_topic_coverage_from_stored_articles
 from src.demo_runner import run_demo_pipeline
@@ -1790,11 +1790,12 @@ def render_article_fetch_status() -> None:
     st.caption("Blocked, rate-limited, or unreachable pages are logged instead of guessed.")
     if st.button("Fetch approved-source articles", type="primary"):
         with closing(get_connection()) as connection:
-            total_sources = len(list_active_sources(connection))
+            total_sources = len(dedupe_sources(list_active_sources(connection)))
         progress_bar = st.progress(0)
         current_status = st.empty()
         recent_events = st.empty()
         progress_state = {"completed_sources": 0, "events": []}
+        automation_settings = get_automation_settings()
 
         def update_fetch_progress(event: dict[str, object]) -> None:
             completed = int(event.get("completed_sources") or progress_state["completed_sources"])
@@ -1810,7 +1811,7 @@ def render_article_fetch_status() -> None:
                     max_articles_per_source=None,
                     progress_callback=update_fetch_progress,
                     exhaustive_scan=True,
-                    source_time_budget_seconds=180,
+                    source_time_budget_seconds=automation_settings.fetch_source_time_budget_seconds,
                 )
                 st.success(
                     f"Fetch complete: {summary.inserted} inserted, {summary.updated} updated, "
@@ -2537,13 +2538,14 @@ def render_automation_alerts(
 
     budget = settings.fetch_source_time_budget_seconds
     with st.expander("Scan performance"):
+        budget_value = min(max(settings.fetch_source_time_budget_seconds, 60), 180)
         budget = st.number_input(
             "Maximum seconds per source",
             min_value=60,
-            max_value=600,
-            value=settings.fetch_source_time_budget_seconds,
+            max_value=180,
+            value=budget_value,
             step=30,
-            help="Increase this only when large websites are being cut off before their scan completes.",
+            help="Recommended: 60-90 seconds. Increase only if important sources are being cut off.",
         )
 
     if st.button("Save schedule", type="primary"):

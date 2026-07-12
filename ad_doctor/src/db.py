@@ -13,6 +13,7 @@ from src.config import DATABASE_PATH, SCHEMA_PATH
 
 _INITIALIZATION_LOCK = threading.Lock()
 _INITIALIZED_DATABASES: set[tuple[str, int]] = set()
+DEFAULT_FETCH_SOURCE_TIME_BUDGET_SECONDS = 90
 
 
 def get_connection(database_path: Path = DATABASE_PATH) -> sqlite3.Connection:
@@ -88,7 +89,7 @@ def run_migrations(connection: sqlite3.Connection) -> None:
             task_name TEXT NOT NULL DEFAULT 'AdDoctorDailyScrape',
             notify_on_success INTEGER NOT NULL DEFAULT 1,
             notify_on_failure INTEGER NOT NULL DEFAULT 1,
-            fetch_source_time_budget_seconds INTEGER NOT NULL DEFAULT 180,
+            fetch_source_time_budget_seconds INTEGER NOT NULL DEFAULT 90,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
         """
@@ -273,6 +274,7 @@ def run_migrations(connection: sqlite3.Connection) -> None:
         """
     )
     ensure_automation_settings(connection)
+    migrate_fetch_source_budget_default(connection)
 
 
 def ensure_columns(
@@ -352,8 +354,35 @@ def ensure_automation_settings(connection: sqlite3.Connection) -> None:
             fetch_source_time_budget_seconds,
             schedule_times
         )
-        VALUES (1, 1, '09:00', 'Asia/Kolkata', 'AdDoctorDailyScrape', 1, 1, 180, '["09:00"]')
+        VALUES (1, 1, '09:00', 'Asia/Kolkata', 'AdDoctorDailyScrape', 1, 1, 90, '["09:00"]')
         """
+    )
+
+
+def migrate_fetch_source_budget_default(connection: sqlite3.Connection) -> None:
+    flag_key = "fetch_source_budget_reduced_to_90_v1"
+    existing = connection.execute(
+        "SELECT value FROM system_flags WHERE key = ?",
+        (flag_key,),
+    ).fetchone()
+    if existing:
+        return
+    connection.execute(
+        """
+        UPDATE automation_settings
+        SET fetch_source_time_budget_seconds = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = 1
+          AND fetch_source_time_budget_seconds >= 180
+        """,
+        (DEFAULT_FETCH_SOURCE_TIME_BUDGET_SECONDS,),
+    )
+    connection.execute(
+        """
+        INSERT INTO system_flags (key, value, updated_at)
+        VALUES (?, 'complete', CURRENT_TIMESTAMP)
+        """,
+        (flag_key,),
     )
 
 

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import json
+import os
 import re
 import time
 from typing import Any, Callable
@@ -45,6 +47,20 @@ class FetchSummary:
     duration_seconds: float = 0.0
 
 
+@dataclass(frozen=True)
+class SourceFetchResult:
+    source: dict[str, Any]
+    source_index: int
+    total_sources: int
+    source_name: str
+    article_records: list[dict[str, Any]]
+    messages: list[dict[str, Any]]
+    candidates_checked: int
+    valid_articles: int
+    failed: int
+    elapsed_seconds: float
+
+
 def fetch_articles(
     max_articles_per_source: int | None = 5,
     database_path=DATABASE_PATH,
@@ -53,6 +69,7 @@ def fetch_articles(
     source_time_budget_seconds: int = 20,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
     exhaustive_scan: bool = False,
+    source_parallelism: int | None = None,
 ) -> FetchSummary:
     initialize_database(database_path=database_path)
     run_id = run_id or build_run_id()
@@ -64,7 +81,8 @@ def fetch_articles(
     messages: list[str] = []
 
     with closing(get_connection(database_path)) as connection:
-        sources = list_active_sources(connection)
+        sources = dedupe_sources(list_active_sources(connection))
+        source_parallelism = resolve_source_parallelism(source_parallelism, len(sources))
         log_run_event(
             connection,
             run_id,
@@ -72,7 +90,8 @@ def fetch_articles(
             "start",
             (
                 f"Starting article fetch for {len(sources)} active source(s), "
-                f"{'all discoverable articles' if max_articles_per_source is None else f'up to {max_articles_per_source} article(s) each'}."
+                f"{'all discoverable articles' if max_articles_per_source is None else f'up to {max_articles_per_source} article(s) each'}; "
+                f"parallelism {source_parallelism}; {source_time_budget_seconds}s per-source budget."
             ),
             auto_commit=True,
         )
@@ -83,134 +102,115 @@ def fetch_articles(
                 f"Starting article fetch for {len(sources)} active source(s), "
                 f"{'all discoverable articles' if max_articles_per_source is None else f'up to {max_articles_per_source} article(s) each'}."
             ),
-            {"total_sources": len(sources), "completed_sources": 0},
+            {
+                "total_sources": len(sources),
+                "completed_sources": 0,
+                "source_parallelism": source_parallelism,
+                "source_time_budget_seconds": source_time_budget_seconds,
+            },
         )
 
-        for source_index, source in enumerate(sources, start=1):
-            source_started_at = time.monotonic()
-            source_name = str(source["source_name"])
-            source_seen = 0
-            source_valid = 0
-            log_run_event(
-                connection,
-                run_id,
-                "phase_3_article_fetch",
-                "source_start",
-                f"Checking source: {source_name}.",
-                auto_commit=True,
-            )
-            emit_progress(
-                progress_callback,
-                "source_start",
-                f"Checking {source_name} ({source_index}/{len(sources)}).",
-                {
-                    "source_index": source_index,
-                    "total_sources": len(sources),
-                    "completed_sources": source_index - 1,
-                    "source_name": source_name,
-                },
-            )
-            try:
-                valid_articles_for_source = 0
-                candidates = discover_article_candidates(
-                    source,
-                    max_articles_per_source=max_articles_per_source,
-                    candidate_limit=calculate_candidate_limit(max_articles_per_source),
-                    connection=connection,
-                    exhaustive_scan=exhaustive_scan,
-                    source_deadline_monotonic=source_started_at + source_time_budget_seconds,
-                )
-                if not candidates:
-                    message = f"No article candidates found for {source_name}."
-                    messages.append(message)
-                    log_run_event(connection, run_id, "phase_3_article_fetch", "warning", message, auto_commit=True)
-                    emit_progress(progress_callback, "warning", message, {"source_name": source_name})
-                    continue
-
-                for candidate in candidates:
-                    if time.monotonic() - source_started_at > source_time_budget_seconds:
-                        message = f"Stopped source {source_name} after {source_time_budget_seconds}s budget; kept {valid_articles_for_source} valid article(s)."
-                        messages.append(message)
-                        log_run_event(
-                            connection,
-                            run_id,
-                            "phase_3_article_fetch",
-                            "source_timed_out",
-                            message,
-                            json.dumps(
-                                {
-                                    "source_id": source["id"],
-                                    "source_name": source_name,
-                                    "valid_articles": valid_articles_for_source,
-                                    "elapsed_seconds": round(time.monotonic() - source_started_at, 2),
-                                }
-                            ),
-                            auto_commit=True,
-                        )
-                        emit_progress(
-                            progress_callback,
-                            "source_timed_out",
-                            message,
-                            {
-                                "source_name": source_name,
-                                "valid_articles": valid_articles_for_source,
-                                "elapsed_seconds": round(time.monotonic() - source_started_at, 2),
-                            },
-                        )
-                        break
-                    articles_seen += 1
-                    source_seen += 1
-                    try:
-                        parsed = parse_candidate(candidate, fetch_full_text=fetch_full_text)
-                        if not is_valid_parsed_article(parsed):
-                            message = f"Skipped low-quality article candidate for {source_name}: {candidate.get('article_url')}"
-                            messages.append(message)
-                            log_run_event(connection, run_id, "phase_3_article_fetch", "warning", message, auto_commit=True)
-                            emit_progress(progress_callback, "warning", message, {"source_name": source_name})
-                            continue
-                        article = parsed.to_record()
-                        article.update(
-                            {
-                                "source_id": source["id"],
-                                "source_name": source["source_name"],
-                                "source_url": source["website_url"],
-                                "fetch_run_id": run_id,
-                            }
-                        )
-                        outcome = upsert_article(connection, article)
-                        if outcome == "inserted":
-                            inserted += 1
-                        else:
-                            updated += 1
-                        valid_articles_for_source += 1
-                        source_valid += 1
-                        if max_articles_per_source is not None and valid_articles_for_source >= max_articles_per_source:
-                            break
-                    except Exception as exc:
-                        failed += 1
-                        message = f"Failed article for {source_name}: {candidate.get('article_url')} ({exc})"
-                        messages.append(message)
-                        log_run_event(connection, run_id, "phase_3_article_fetch", "error", message, auto_commit=True)
-                        emit_progress(progress_callback, "error", message, {"source_name": source_name})
-            except Exception as exc:
-                failed += 1
-                message = f"Failed source {source_name}: {exc}"
-                messages.append(message)
+        completed_sources = 0
+        with ThreadPoolExecutor(max_workers=max(1, source_parallelism), thread_name_prefix="ad-source") as executor:
+            futures = {}
+            for source_index, source in enumerate(sources, start=1):
+                source_name = str(source["source_name"])
                 log_run_event(
                     connection,
                     run_id,
                     "phase_3_article_fetch",
-                    "source_failed",
-                    message,
-                    json.dumps({"source_id": source["id"], "source_name": source_name}),
+                    "source_start",
+                    f"Checking source: {source_name}.",
                     auto_commit=True,
                 )
-                emit_progress(progress_callback, "source_failed", message, {"source_name": source_name})
-            finally:
-                elapsed_seconds = round(time.monotonic() - source_started_at, 2)
+                emit_progress(
+                    progress_callback,
+                    "source_start",
+                    f"Checking {source_name} ({source_index}/{len(sources)}).",
+                    {
+                        "source_index": source_index,
+                        "total_sources": len(sources),
+                        "completed_sources": completed_sources,
+                        "source_name": source_name,
+                    },
+                )
+                future = executor.submit(
+                    fetch_source_article_records,
+                    source=source,
+                    source_index=source_index,
+                    total_sources=len(sources),
+                    run_id=run_id,
+                    max_articles_per_source=max_articles_per_source,
+                    fetch_full_text=fetch_full_text,
+                    source_time_budget_seconds=source_time_budget_seconds,
+                    exhaustive_scan=exhaustive_scan,
+                )
+                futures[future] = source
+
+            for future in as_completed(futures):
+                source = futures[future]
+                try:
+                    result = future.result()
+                except Exception as exc:
+                    source_name = str(source["source_name"])
+                    result = SourceFetchResult(
+                        source=source,
+                        source_index=0,
+                        total_sources=len(sources),
+                        source_name=source_name,
+                        article_records=[],
+                        messages=[
+                            {
+                                "event_type": "source_failed",
+                                "message": f"Failed source {source_name}: {exc}",
+                                "metadata": {"source_id": source["id"], "source_name": source_name},
+                            }
+                        ],
+                        candidates_checked=0,
+                        valid_articles=0,
+                        failed=1,
+                        elapsed_seconds=0.0,
+                    )
+
+                for event in result.messages:
+                    event_type = str(event.get("event_type") or "warning")
+                    message = str(event.get("message") or "")
+                    metadata = event.get("metadata")
+                    messages.append(message)
+                    log_run_event(
+                        connection,
+                        run_id,
+                        "phase_3_article_fetch",
+                        event_type,
+                        message,
+                        json.dumps(metadata) if metadata else None,
+                        auto_commit=True,
+                    )
+                    emit_progress(
+                        progress_callback,
+                        event_type,
+                        message,
+                        metadata if isinstance(metadata, dict) else {"source_name": result.source_name},
+                    )
+
+                source_inserted = 0
+                source_updated = 0
+                for article in result.article_records:
+                    outcome = upsert_article(connection, article)
+                    if outcome == "inserted":
+                        inserted += 1
+                        source_inserted += 1
+                    else:
+                        updated += 1
+                        source_updated += 1
+
+                failed += result.failed
+                articles_seen += result.candidates_checked
+                completed_sources += 1
                 source_complete_message = (
-                    f"Finished {source_name}: {source_valid} valid article(s), "
-                    f"{source_seen} candidate(s) checked in {elapsed_seconds}s."
+                    f"Finished {result.source_name}: {result.valid_articles} valid article(s), "
+                    f"{result.candidates_checked} candidate(s) checked in {result.elapsed_seconds}s "
+                    f"({source_inserted} inserted, {source_updated} updated)."
                 )
                 log_run_event(
                     connection,
@@ -220,11 +220,16 @@ def fetch_articles(
                     source_complete_message,
                     json.dumps(
                         {
-                            "source_id": source["id"],
-                            "source_name": source_name,
-                            "valid_articles": source_valid,
-                            "candidates_checked": source_seen,
-                            "elapsed_seconds": elapsed_seconds,
+                            "source_id": result.source["id"],
+                            "source_name": result.source_name,
+                            "valid_articles": result.valid_articles,
+                            "candidates_checked": result.candidates_checked,
+                            "elapsed_seconds": result.elapsed_seconds,
+                            "source_index": result.source_index,
+                            "completed_sources": completed_sources,
+                            "total_sources": len(sources),
+                            "inserted": source_inserted,
+                            "updated": source_updated,
                         }
                     ),
                     auto_commit=True,
@@ -234,13 +239,13 @@ def fetch_articles(
                     "source_complete",
                     source_complete_message,
                     {
-                        "source_name": source_name,
-                        "source_index": source_index,
+                        "source_name": result.source_name,
+                        "source_index": result.source_index,
                         "total_sources": len(sources),
-                        "completed_sources": source_index,
-                        "valid_articles": source_valid,
-                        "candidates_checked": source_seen,
-                        "elapsed_seconds": elapsed_seconds,
+                        "completed_sources": completed_sources,
+                        "valid_articles": result.valid_articles,
+                        "candidates_checked": result.candidates_checked,
+                        "elapsed_seconds": result.elapsed_seconds,
                     },
                 )
 
@@ -270,6 +275,153 @@ def fetch_articles(
             {"total_sources": len(sources), "completed_sources": len(sources)},
         )
         return summary
+
+
+def fetch_source_article_records(
+    *,
+    source: dict[str, Any],
+    source_index: int,
+    total_sources: int,
+    run_id: str,
+    max_articles_per_source: int | None,
+    fetch_full_text: bool,
+    source_time_budget_seconds: int,
+    exhaustive_scan: bool,
+) -> SourceFetchResult:
+    source_started_at = time.monotonic()
+    source_name = str(source["source_name"])
+    source_seen = 0
+    source_valid = 0
+    failed = 0
+    messages: list[dict[str, Any]] = []
+    records: list[dict[str, Any]] = []
+    try:
+        valid_articles_for_source = 0
+        candidates = discover_article_candidates(
+            source,
+            max_articles_per_source=max_articles_per_source,
+            candidate_limit=calculate_candidate_limit(max_articles_per_source),
+            connection=None,
+            exhaustive_scan=exhaustive_scan,
+            source_deadline_monotonic=source_started_at + source_time_budget_seconds,
+        )
+        if not candidates:
+            messages.append(
+                {
+                    "event_type": "warning",
+                    "message": f"No article candidates found for {source_name}.",
+                    "metadata": {"source_name": source_name},
+                }
+            )
+        for candidate in candidates:
+            if time.monotonic() - source_started_at > source_time_budget_seconds:
+                messages.append(
+                    {
+                        "event_type": "source_timed_out",
+                        "message": (
+                            f"Stopped source {source_name} after {source_time_budget_seconds}s budget; "
+                            f"kept {valid_articles_for_source} valid article(s)."
+                        ),
+                        "metadata": {
+                            "source_id": source["id"],
+                            "source_name": source_name,
+                            "valid_articles": valid_articles_for_source,
+                            "elapsed_seconds": round(time.monotonic() - source_started_at, 2),
+                        },
+                    }
+                )
+                break
+            source_seen += 1
+            try:
+                parsed = parse_candidate(candidate, fetch_full_text=fetch_full_text)
+                if not is_valid_parsed_article(parsed):
+                    messages.append(
+                        {
+                            "event_type": "warning",
+                            "message": (
+                                f"Skipped low-quality article candidate for {source_name}: "
+                                f"{candidate.get('article_url')}"
+                            ),
+                            "metadata": {"source_name": source_name},
+                        }
+                    )
+                    continue
+                article = parsed.to_record()
+                article.update(
+                    {
+                        "source_id": source["id"],
+                        "source_name": source["source_name"],
+                        "source_url": source["website_url"],
+                        "fetch_run_id": run_id,
+                    }
+                )
+                records.append(article)
+                valid_articles_for_source += 1
+                source_valid += 1
+                if max_articles_per_source is not None and valid_articles_for_source >= max_articles_per_source:
+                    break
+            except Exception as exc:
+                failed += 1
+                messages.append(
+                    {
+                        "event_type": "error",
+                        "message": f"Failed article for {source_name}: {candidate.get('article_url')} ({exc})",
+                        "metadata": {"source_name": source_name},
+                    }
+                )
+    except Exception as exc:
+        failed += 1
+        messages.append(
+            {
+                "event_type": "source_failed",
+                "message": f"Failed source {source_name}: {exc}",
+                "metadata": {"source_id": source["id"], "source_name": source_name},
+            }
+        )
+    return SourceFetchResult(
+        source=source,
+        source_index=source_index,
+        total_sources=total_sources,
+        source_name=source_name,
+        article_records=records,
+        messages=messages,
+        candidates_checked=source_seen,
+        valid_articles=source_valid,
+        failed=failed,
+        elapsed_seconds=round(time.monotonic() - source_started_at, 2),
+    )
+
+
+def resolve_source_parallelism(source_parallelism: int | None, source_count: int) -> int:
+    if source_count <= 1:
+        return 1
+    if source_parallelism is None:
+        raw_value = os.getenv("AD_DOCTOR_SOURCE_PARALLELISM", "4").strip()
+        try:
+            source_parallelism = int(raw_value)
+        except ValueError:
+            source_parallelism = 4
+    return max(1, min(int(source_parallelism), source_count, 6))
+
+
+def dedupe_sources(sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for source in sources:
+        key = normalize_source_identity(source)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(source)
+    return deduped
+
+
+def normalize_source_identity(source: dict[str, Any]) -> str:
+    website_url = str(source.get("website_url") or "").strip().lower().rstrip("/")
+    website_url = re.sub(r"^https?://(www\.)?", "", website_url)
+    if website_url:
+        return website_url
+    return str(source.get("source_name") or "").strip().lower()
 
 
 def emit_progress(
@@ -340,7 +492,7 @@ def discover_article_candidates(
         try:
             if has_time_remaining(source_deadline_monotonic):
                 candidates.extend(
-                    crawl_source_article_candidates(
+                    discover_sitemap_article_candidates(
                         source_url=str(source["website_url"]),
                         limit=candidate_limit,
                         source_deadline_monotonic=source_deadline_monotonic,
@@ -348,7 +500,7 @@ def discover_article_candidates(
                 )
             if has_time_remaining(source_deadline_monotonic):
                 candidates.extend(
-                    discover_sitemap_article_candidates(
+                    crawl_source_article_candidates(
                         source_url=str(source["website_url"]),
                         limit=candidate_limit,
                         source_deadline_monotonic=source_deadline_monotonic,
@@ -429,7 +581,7 @@ def fetch_rss_candidates(feed_url: str, max_articles_per_source: int | None = 5)
         feed_url,
         timeout=4,
         headers=build_request_headers(referer=root_from_url(feed_url)),
-        attempts=2,
+        attempts=1,
     )
     parsed_feed = feedparser.parse(response.content)
     candidates: list[dict[str, str | None]] = []
@@ -504,9 +656,9 @@ def discover_sitemap_article_candidates_from_url(
     fetched_sitemaps.add(sitemap_url)
     response = request_with_retries(
         sitemap_url,
-        timeout=8,
+        timeout=5,
         headers=build_request_headers(referer=root_from_url(source_url)),
-        attempts=2,
+        attempts=1,
     )
     locs = extract_sitemap_locs(response.text)
     child_sitemaps = [loc for loc in locs if "sitemap" in loc.lower()]
@@ -550,7 +702,7 @@ def discover_sitemap_article_candidates_from_url(
 def crawl_source_article_candidates(
     source_url: str,
     limit: int | None = None,
-    page_limit: int = 80,
+    page_limit: int = 30,
     source_deadline_monotonic: float | None = None,
 ) -> list[dict[str, str | None]]:
     requests = require_requests()
@@ -566,9 +718,9 @@ def crawl_source_article_candidates(
         try:
             response = request_with_retries(
                 page_url,
-                timeout=6,
+                timeout=4,
                 headers=build_request_headers(referer=root_from_url(source_url)),
-                attempts=2,
+                attempts=1,
             )
         except Exception:
             continue
@@ -723,9 +875,9 @@ def discover_robots_sitemaps(
     try:
         response = request_with_retries(
             f"{root_url}/robots.txt",
-            timeout=4,
+            timeout=3,
             headers=build_request_headers(referer=root_url),
-            attempts=2,
+            attempts=1,
         )
     except Exception:
         return []

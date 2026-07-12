@@ -53,6 +53,7 @@ class AutomationSettingsTest(unittest.TestCase):
         self.assertEqual(settings.schedule_time, "09:00")
         self.assertEqual(settings.task_name, "AdDoctorDailyScrape")
         self.assertTrue(settings.notify_on_success)
+        self.assertEqual(settings.fetch_source_time_budget_seconds, 90)
 
     def test_settings_can_be_saved(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

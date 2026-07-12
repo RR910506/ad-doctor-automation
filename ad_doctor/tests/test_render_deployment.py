@@ -16,6 +16,10 @@ class RenderDeploymentTest(unittest.TestCase):
         self.assertIn("AD_DOCTOR_DATABASE_PATH", render_yaml)
         self.assertIn("AD_DOCTOR_SCHEDULER_MODE", render_yaml)
         self.assertIn("value: worker", render_yaml)
+        self.assertIn("AD_DOCTOR_SOURCE_PARALLELISM", render_yaml)
+        self.assertIn('value: "4"', render_yaml)
+        self.assertIn("AD_DOCTOR_JOB_TIMEOUT_SECONDS", render_yaml)
+        self.assertIn('value: "7200"', render_yaml)
         self.assertIn("AD_DOCTOR_CLEAR_SQLITE_GENERATED_DATA_FOR_GOOGLE", render_yaml)
         self.assertIn('value: "0"', render_yaml)
 
@@ -36,6 +40,7 @@ class RenderDeploymentTest(unittest.TestCase):
         self.assertIn('"streamlit"', supervisor)
         self.assertIn('"src.scheduler_worker"', supervisor)
         self.assertIn('web_environment["AD_DOCTOR_APP_SCHEDULER_ENABLED"] = "0"', supervisor)
+        self.assertIn('worker_environment["AD_DOCTOR_SCHEDULER_MODE"] = "worker"', supervisor)
 
 
 if __name__ == "__main__":

@@ -40,6 +40,8 @@ AD_DOCTOR_SCHEDULER_MODE=worker
 
 The web process does not run the scheduler loop. The separate `src.scheduler_worker` process queues every saved timestamp, runs one automation at a time, writes heartbeat/progress fields, and marks interrupted runs as recovered or timed out.
 
+Article scraping uses approved sources only, RSS/feed and sitemap discovery before deeper crawling, a 90-second default budget per source, and source-level parallelism of 4 workers. This keeps daily runs faster without opening multiple SQLite writers.
+
 ## Required Render Environment Variables
 
 Set these in Render:
@@ -53,7 +55,8 @@ AD_DOCTOR_SCHEDULER_MODE=worker
 AD_DOCTOR_SCHEDULER_POLL_SECONDS=30
 AD_DOCTOR_SCHEDULER_CATCHUP_HOURS=24
 AD_DOCTOR_WORKER_STALE_SECONDS=900
-AD_DOCTOR_JOB_TIMEOUT_SECONDS=10800
+AD_DOCTOR_JOB_TIMEOUT_SECONDS=7200
+AD_DOCTOR_SOURCE_PARALLELISM=4
 OPENAI_MODEL=gpt-4.1-mini
 OPENAI_BASE_URL=https://api.openai.com/v1
 GOOGLE_DRAFTS_WORKSHEET_NAME=Drafts

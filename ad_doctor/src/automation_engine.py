@@ -13,6 +13,7 @@ from src.db import get_connection, initialize_database
 
 
 TASK_NAME = "AdDoctorDailyScrape"
+DEFAULT_FETCH_SOURCE_TIME_BUDGET_SECONDS = 90
 
 
 @dataclass(frozen=True)
@@ -62,7 +63,7 @@ def get_automation_settings(database_path=DATABASE_PATH) -> AutomationSettings:
             task_name=TASK_NAME,
             notify_on_success=True,
             notify_on_failure=True,
-            fetch_source_time_budget_seconds=180,
+            fetch_source_time_budget_seconds=DEFAULT_FETCH_SOURCE_TIME_BUDGET_SECONDS,
             schedule_times=("09:00",),
         )
     schedule_times = parse_schedule_times(row["schedule_times"] or row["schedule_time"])
@@ -88,7 +89,7 @@ def save_automation_settings(
     task_name: str = TASK_NAME,
     notify_on_success: bool = True,
     notify_on_failure: bool = True,
-    fetch_source_time_budget_seconds: int = 180,
+    fetch_source_time_budget_seconds: int = DEFAULT_FETCH_SOURCE_TIME_BUDGET_SECONDS,
     database_path=DATABASE_PATH,
 ) -> AutomationSettings:
     normalized_schedule_times = parse_schedule_times(schedule_times or schedule_time)

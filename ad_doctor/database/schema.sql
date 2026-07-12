@@ -146,7 +146,7 @@ CREATE TABLE IF NOT EXISTS automation_settings (
     task_name TEXT NOT NULL DEFAULT 'AdDoctorDailyScrape',
     notify_on_success INTEGER NOT NULL DEFAULT 1,
     notify_on_failure INTEGER NOT NULL DEFAULT 1,
-    fetch_source_time_budget_seconds INTEGER NOT NULL DEFAULT 180,
+    fetch_source_time_budget_seconds INTEGER NOT NULL DEFAULT 90,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

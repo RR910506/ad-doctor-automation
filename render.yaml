@@ -31,7 +31,9 @@ services:
       - key: AD_DOCTOR_WORKER_STALE_SECONDS
         value: "900"
       - key: AD_DOCTOR_JOB_TIMEOUT_SECONDS
-        value: "10800"
+        value: "7200"
+      - key: AD_DOCTOR_SOURCE_PARALLELISM
+        value: "4"
       - key: OPENROUTER_API_KEY
         sync: false
       - key: OPENAI_API_KEY

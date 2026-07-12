@@ -17,6 +17,7 @@ def main() -> int:
 
     worker_environment = base_environment.copy()
     worker_environment["AD_DOCTOR_APP_SCHEDULER_ENABLED"] = "0"
+    worker_environment["AD_DOCTOR_SCHEDULER_MODE"] = "worker"
 
     port = base_environment.get("PORT", "8501")
     web_command = [
