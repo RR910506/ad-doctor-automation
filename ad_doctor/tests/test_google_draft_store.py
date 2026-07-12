@@ -12,6 +12,11 @@ from src.db import (
     initialize_database,
     upsert_source,
 )
+from src.google_workspace_store import (
+    get_google_doc_share_recipients,
+    share_google_doc_with_email,
+)
+from src.notification_engine import upsert_app_user
 
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
@@ -19,6 +24,94 @@ SCHEMA_PATH = PROJECT_DIR / "database" / "schema.sql"
 
 
 class GoogleDraftStoreTest(unittest.TestCase):
+    def test_google_doc_share_recipients_uses_enabled_notification_users(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            database_path = Path(temp_dir) / "ad_doctor.db"
+            previous_share = os.environ.get("GOOGLE_SHARE_DRAFT_DOCS_WITH_RECIPIENTS")
+            os.environ["GOOGLE_SHARE_DRAFT_DOCS_WITH_RECIPIENTS"] = "1"
+            try:
+                initialize_database(database_path=database_path, schema_path=SCHEMA_PATH)
+                upsert_app_user(
+                    "enabled@example.com",
+                    notifications_enabled=True,
+                    mark_logged_in=False,
+                    database_path=database_path,
+                )
+                upsert_app_user(
+                    "disabled@example.com",
+                    notifications_enabled=False,
+                    mark_logged_in=False,
+                    database_path=database_path,
+                )
+
+                self.assertEqual(
+                    get_google_doc_share_recipients(database_path=database_path),
+                    ["enabled@example.com"],
+                )
+            finally:
+                if previous_share is None:
+                    os.environ.pop("GOOGLE_SHARE_DRAFT_DOCS_WITH_RECIPIENTS", None)
+                else:
+                    os.environ["GOOGLE_SHARE_DRAFT_DOCS_WITH_RECIPIENTS"] = previous_share
+
+    def test_google_doc_share_recipients_can_be_disabled(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            database_path = Path(temp_dir) / "ad_doctor.db"
+            previous_share = os.environ.get("GOOGLE_SHARE_DRAFT_DOCS_WITH_RECIPIENTS")
+            os.environ["GOOGLE_SHARE_DRAFT_DOCS_WITH_RECIPIENTS"] = "0"
+            try:
+                initialize_database(database_path=database_path, schema_path=SCHEMA_PATH)
+                upsert_app_user(
+                    "enabled@example.com",
+                    notifications_enabled=True,
+                    mark_logged_in=False,
+                    database_path=database_path,
+                )
+
+                self.assertEqual(get_google_doc_share_recipients(database_path=database_path), [])
+            finally:
+                if previous_share is None:
+                    os.environ.pop("GOOGLE_SHARE_DRAFT_DOCS_WITH_RECIPIENTS", None)
+                else:
+                    os.environ["GOOGLE_SHARE_DRAFT_DOCS_WITH_RECIPIENTS"] = previous_share
+
+    def test_share_google_doc_with_email_creates_reader_permission(self) -> None:
+        class FakePermissions:
+            def __init__(self) -> None:
+                self.calls = []
+
+            def create(self, **kwargs):
+                self.calls.append(kwargs)
+                return self
+
+            def execute(self):
+                return {}
+
+        class FakeDrive:
+            def __init__(self) -> None:
+                self.permission_resource = FakePermissions()
+
+            def permissions(self):
+                return self.permission_resource
+
+        drive = FakeDrive()
+        share_google_doc_with_email(drive, "doc123", "user@example.com")
+
+        self.assertEqual(
+            drive.permission_resource.calls,
+            [
+                {
+                    "fileId": "doc123",
+                    "body": {
+                        "type": "user",
+                        "role": "reader",
+                        "emailAddress": "user@example.com",
+                    },
+                    "sendNotificationEmail": False,
+                }
+            ],
+        )
+
     def test_google_mode_does_not_clear_generated_tables_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             database_path = Path(temp_dir) / "ad_doctor.db"

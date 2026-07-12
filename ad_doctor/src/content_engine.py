@@ -189,7 +189,8 @@ def generate_content_outputs(
         google_synced = 0
         if is_google_draft_store_enabled():
             google_synced = sync_content_outputs_to_google_workspace(
-                list_content_outputs(connection, run_id=run_id)
+                list_content_outputs(connection, run_id=run_id),
+                database_path=database_path,
             )
         log_run_event(
             connection,

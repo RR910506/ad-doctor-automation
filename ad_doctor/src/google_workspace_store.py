@@ -7,6 +7,9 @@ import os
 from pathlib import Path
 from typing import Any
 
+from src.config import DATABASE_PATH
+from src.notification_engine import list_notification_recipients
+
 
 SHEETS_SCOPES = (
     "https://www.googleapis.com/auth/spreadsheets",
@@ -24,6 +27,7 @@ DRAFT_HEADERS = [
     "approval_status",
     "doc_url",
     "draft_markdown",
+    "shared_with",
 ]
 
 
@@ -53,7 +57,11 @@ def get_google_workspace_config() -> GoogleWorkspaceConfig | None:
     )
 
 
-def sync_content_outputs_to_google_workspace(outputs: list[dict[str, Any]]) -> int:
+def sync_content_outputs_to_google_workspace(
+    outputs: list[dict[str, Any]],
+    *,
+    database_path=DATABASE_PATH,
+) -> int:
     if not outputs or not is_google_draft_store_enabled():
         return 0
     config = get_google_workspace_config()
@@ -63,12 +71,19 @@ def sync_content_outputs_to_google_workspace(outputs: list[dict[str, Any]]) -> i
     sheets_service, docs_service, drive_service = build_google_services()
     ensure_drafts_sheet(sheets_service, config)
     existing_ids = get_existing_external_ids(sheets_service, config)
+    share_recipients = get_google_doc_share_recipients(database_path=database_path)
     rows = []
     for output in outputs:
         external_id = build_external_id(output)
         if external_id in existing_ids:
             continue
-        doc_url = create_google_doc_for_draft(docs_service, drive_service, config, output)
+        doc_url = create_google_doc_for_draft(
+            docs_service,
+            drive_service,
+            config,
+            output,
+            share_recipients=share_recipients,
+        )
         rows.append(
             [
                 external_id,
@@ -80,13 +95,14 @@ def sync_content_outputs_to_google_workspace(outputs: list[dict[str, Any]]) -> i
                 str(output.get("approval_status") or "pending"),
                 doc_url,
                 str(output.get("draft_markdown") or ""),
+                ", ".join(share_recipients),
             ]
         )
     if not rows:
         return 0
     sheets_service.spreadsheets().values().append(
         spreadsheetId=config.spreadsheet_id,
-        range=f"{quote_sheet_name(config.worksheet_name)}!A:I",
+        range=f"{quote_sheet_name(config.worksheet_name)}!A:J",
         valueInputOption="RAW",
         insertDataOption="INSERT_ROWS",
         body={"values": rows},
@@ -104,7 +120,7 @@ def list_google_workspace_drafts() -> list[dict[str, Any]]:
     ensure_drafts_sheet(sheets_service, config)
     result = sheets_service.spreadsheets().values().get(
         spreadsheetId=config.spreadsheet_id,
-        range=f"{quote_sheet_name(config.worksheet_name)}!A:I",
+        range=f"{quote_sheet_name(config.worksheet_name)}!A:J",
     ).execute()
     values = result.get("values", [])
     if len(values) <= 1:
@@ -127,6 +143,7 @@ def list_google_workspace_drafts() -> list[dict[str, Any]]:
                 "created_at": item.get("created_at") or "",
                 "updated_at": item.get("created_at") or "",
                 "doc_url": item.get("doc_url") or "",
+                "shared_with": item.get("shared_with") or "",
                 "storage": "google",
             }
         )
@@ -183,13 +200,13 @@ def ensure_drafts_sheet(sheets_service, config: GoogleWorkspaceConfig) -> None:
         ).execute()
     header_result = sheets_service.spreadsheets().values().get(
         spreadsheetId=config.spreadsheet_id,
-        range=f"{quote_sheet_name(config.worksheet_name)}!A1:I1",
+        range=f"{quote_sheet_name(config.worksheet_name)}!A1:J1",
     ).execute()
-    if header_result.get("values"):
+    if header_result.get("values") and header_result["values"][0] == DRAFT_HEADERS:
         return
     sheets_service.spreadsheets().values().update(
         spreadsheetId=config.spreadsheet_id,
-        range=f"{quote_sheet_name(config.worksheet_name)}!A1:I1",
+        range=f"{quote_sheet_name(config.worksheet_name)}!A1:J1",
         valueInputOption="RAW",
         body={"values": [DRAFT_HEADERS]},
     ).execute()
@@ -203,7 +220,14 @@ def get_existing_external_ids(sheets_service, config: GoogleWorkspaceConfig) -> 
     return {str(row[0]) for row in result.get("values", []) if row}
 
 
-def create_google_doc_for_draft(docs_service, drive_service, config: GoogleWorkspaceConfig, output: dict[str, Any]) -> str:
+def create_google_doc_for_draft(
+    docs_service,
+    drive_service,
+    config: GoogleWorkspaceConfig,
+    output: dict[str, Any],
+    *,
+    share_recipients: list[str] | None = None,
+) -> str:
     title = build_doc_title(output)
     document = docs_service.documents().create(body={"title": title}).execute()
     document_id = document["documentId"]
@@ -227,7 +251,36 @@ def create_google_doc_for_draft(docs_service, drive_service, config: GoogleWorks
             addParents=config.folder_id,
             fields="id, parents",
         ).execute()
+    for recipient in share_recipients or []:
+        share_google_doc_with_email(drive_service, document_id, recipient)
     return f"https://docs.google.com/document/d/{document_id}/edit"
+
+
+def get_google_doc_share_recipients(*, database_path=DATABASE_PATH) -> list[str]:
+    if not should_share_google_docs_with_recipients():
+        return []
+    return list_notification_recipients(database_path=database_path)
+
+
+def should_share_google_docs_with_recipients() -> bool:
+    return os.getenv("GOOGLE_SHARE_DRAFT_DOCS_WITH_RECIPIENTS", "1").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+
+
+def share_google_doc_with_email(drive_service, document_id: str, recipient: str) -> None:
+    drive_service.permissions().create(
+        fileId=document_id,
+        body={
+            "type": "user",
+            "role": "reader",
+            "emailAddress": recipient,
+        },
+        sendNotificationEmail=False,
+    ).execute()
 
 
 def build_external_id(output: dict[str, Any]) -> str:

@@ -50,6 +50,8 @@ services:
         value: Drafts
       - key: GOOGLE_DRAFTS_FOLDER_ID
         sync: false
+      - key: GOOGLE_SHARE_DRAFT_DOCS_WITH_RECIPIENTS
+        value: "1"
       - key: AD_DOCTOR_SMTP_HOST
         sync: false
       - key: AD_DOCTOR_SMTP_PORT
