@@ -1,0 +1,13 @@
+from __future__ import annotations
+
+from typing import Protocol
+
+from src.domain.evidence_pack import EvidencePack
+
+
+class EvidenceRepository(Protocol):
+    def create(self, evidence_pack: EvidencePack) -> EvidencePack: ...
+    def get_latest_for_case(self, case_id: str) -> EvidencePack | None: ...
+    def get_by_evidence_pack_id(self, evidence_pack_id: str) -> EvidencePack | None: ...
+    def list_versions_for_case(self, case_id: str) -> list[EvidencePack]: ...
+

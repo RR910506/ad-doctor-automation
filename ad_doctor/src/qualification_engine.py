@@ -15,6 +15,7 @@ from src.db import (
     upsert_topic_score,
 )
 from src.research_engine import select_topic_specific_articles
+from src.case_files import get_case_lifecycle_service
 
 
 UNIQUE_SOURCE_QUALIFICATION_GATE = 3
@@ -86,6 +87,7 @@ def qualify_topics(
 ) -> QualificationSummary:
     run_id = run_id or datetime.now(UTC).strftime("run_%Y%m%d_%H%M%S")
 
+    shadow_rows: list[tuple[dict[str, object], list[dict[str, object]], dict[str, object], bool]] = []
     with closing(get_connection(database_path)) as connection:
         topics = list_topics(connection, limit=None)
         active_source_count = count_active_sources(connection)
@@ -118,6 +120,7 @@ def qualify_topics(
             else:
                 update_topic_status(connection, topic_id, "rejected")
                 rejected += 1
+            shadow_rows.append((dict(topic), list(scoring_inputs["coverages"]), score, unique_source_coverage_count >= minimum_required and minimum_required > 0))
 
         summary = QualificationSummary(
             run_id=run_id,
@@ -136,7 +139,16 @@ def qualify_topics(
             json.dumps(summary.__dict__),
         )
         connection.commit()
-        return summary
+    lifecycle = get_case_lifecycle_service(database_path)
+    if lifecycle:
+        for topic, coverages, score, is_qualified in shadow_rows:
+            try:
+                lifecycle.sync_qualification(topic, coverages, score, qualified=is_qualified, run_id=run_id)
+            except Exception as exc:
+                with closing(get_connection(database_path)) as connection:
+                    log_run_event(connection, run_id, "case_shadow_qualification", "error", f"Case shadow write failed for topic {topic['id']}: {exc}", json.dumps({"run_id":run_id,"topic_id":topic["id"],"stage":"qualification","error_type":type(exc).__name__}))
+                    connection.commit()
+    return summary
 
 
 def get_exact_topic_scoring_inputs(connection, topic: dict[str, object]) -> dict[str, object]:

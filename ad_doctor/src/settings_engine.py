@@ -284,6 +284,8 @@ def save_research_settings(
     endpoint: str,
     database_path=DATABASE_PATH,
 ) -> dict[str, str]:
+    from src.security.resolver import configure_runtime_secret
+    configure_runtime_secret(database_path, "PERPLEXITY_API_KEY", api_key)
     engine = get_research_engine_by_key(provider_key)
     model = model.strip() or engine["model"]
     endpoint = endpoint.strip() or engine["endpoint"]
@@ -291,17 +293,16 @@ def save_research_settings(
         connection.execute(
             """
             INSERT INTO research_provider_settings (
-                id, provider_key, api_key, model, endpoint, updated_at
+                id, provider_key, model, endpoint, updated_at
             )
-            VALUES (1, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            VALUES (1, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(id) DO UPDATE SET
                 provider_key = excluded.provider_key,
-                api_key = excluded.api_key,
                 model = excluded.model,
                 endpoint = excluded.endpoint,
                 updated_at = CURRENT_TIMESTAMP
             """,
-            (provider_key, api_key.strip(), model, endpoint),
+            (provider_key, model, endpoint),
         )
         connection.commit()
     return load_research_settings(database_path=database_path)
@@ -320,6 +321,8 @@ def load_content_writer_settings(database_path=DATABASE_PATH) -> dict[str, str]:
         return dict(DEFAULT_CONTENT_WRITER_SETTINGS)
     settings = dict(DEFAULT_CONTENT_WRITER_SETTINGS)
     settings.update({key: str(row[key] if row[key] is not None else "") for key in row.keys()})
+    from src.security.resolver import build_secret_provider
+    settings["api_key"] = build_secret_provider(database_path).resolve("OPENAI_API_KEY").value or ""
     return settings
 
 
@@ -332,6 +335,8 @@ def save_content_writer_settings(
     endpoint: str,
     database_path=DATABASE_PATH,
 ) -> dict[str, str]:
+    from src.security.resolver import configure_runtime_secret
+    configure_runtime_secret(database_path, "OPENAI_API_KEY", api_key)
     provider_key = provider_key.strip() or "openai"
     model = model.strip() or DEFAULT_CONTENT_WRITER_SETTINGS["model"]
     endpoint = endpoint.strip() or DEFAULT_CONTENT_WRITER_SETTINGS["endpoint"]
@@ -339,18 +344,17 @@ def save_content_writer_settings(
         connection.execute(
             """
             INSERT INTO content_writer_settings (
-                id, provider_key, enabled, api_key, model, endpoint, updated_at
+                id, provider_key, enabled, model, endpoint, updated_at
             )
-            VALUES (1, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            VALUES (1, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(id) DO UPDATE SET
                 provider_key = excluded.provider_key,
                 enabled = excluded.enabled,
-                api_key = excluded.api_key,
                 model = excluded.model,
                 endpoint = excluded.endpoint,
                 updated_at = CURRENT_TIMESTAMP
             """,
-            (provider_key, 1 if enabled else 0, api_key.strip(), model, endpoint),
+            (provider_key, 1 if enabled else 0, model, endpoint),
         )
         connection.commit()
     return load_content_writer_settings(database_path=database_path)

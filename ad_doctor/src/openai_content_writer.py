@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import os
+from src.security.resolver import build_secret_provider
 from typing import Any
 
 from src.config import DATABASE_PATH
@@ -23,9 +24,10 @@ class WriterResult:
     error_message: str | None = None
 
 
-def load_writer_runtime_settings(database_path=DATABASE_PATH) -> dict[str, str]:
+def load_writer_runtime_settings(database_path=DATABASE_PATH, *, secret_provider=None) -> dict[str, str]:
     saved = load_content_writer_settings(database_path=database_path)
-    api_key = str(saved.get("api_key") or "").strip() or os.getenv("OPENAI_API_KEY", "").strip()
+    secret = (secret_provider or build_secret_provider(database_path)).resolve("OPENAI_API_KEY")
+    api_key = secret.value or ""
     return {
         "provider_key": str(saved.get("provider_key") or "openai").strip() or "openai",
         "enabled": str(saved.get("enabled") or "1"),

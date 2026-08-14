@@ -19,6 +19,10 @@ from src.db import (
 import src.perplexity_research as perplexity_research
 from src.settings_engine import get_research_engine_by_key, load_research_settings
 from src.topic_matcher import is_same_news_event, topic_similarity
+from src.case_files import get_case_lifecycle_service
+from src.domain.workflow import WorkflowStatus
+from src.adapters.perplexity_evidence_adapter import PerplexityEvidenceAdapter
+from src.security.resolver import build_secret_provider
 
 
 @dataclass(frozen=True)
@@ -36,6 +40,23 @@ def build_research_dossiers(
     requested_run_id = run_id
     run_id = requested_run_id or datetime.now(UTC).strftime("run_%Y%m%d_%H%M%S")
     dossiers_created = 0
+    completed_shadow: list[tuple[int, dict[str, object]]] = []
+    lifecycle = get_case_lifecycle_service(database_path)
+    if lifecycle:
+        with closing(get_connection(database_path)) as shadow_connection:
+            shadow_locked_run_id = requested_run_id or get_latest_locked_run_id(shadow_connection)
+            shadow_locked_topics = list_locked_topics(shadow_connection, run_id=shadow_locked_run_id) if shadow_locked_run_id else []
+        for shadow_locked_topic in shadow_locked_topics:
+            topic_id = int(shadow_locked_topic["topic_id"])
+            try:
+                case = lifecycle.cases.get_by_topic_id(topic_id)
+                if case and case.workflow_status == WorkflowStatus.QUALIFIED.value:
+                    lifecycle.transition_topic(topic_id, WorkflowStatus.RESEARCH_PENDING, run_id=run_id, stage="research", reason="Research queued.")
+                lifecycle.transition_topic(topic_id, WorkflowStatus.RESEARCHING, run_id=run_id, stage="research", reason="Research started.")
+            except Exception as exc:
+                with closing(get_connection(database_path)) as error_connection:
+                    log_run_event(error_connection, run_id, "case_shadow_research", "error", f"Research-start shadow transition failed for topic {topic_id}: {exc}", json.dumps({"run_id":run_id,"topic_id":topic_id,"stage":"research_start","error_type":type(exc).__name__}))
+                    error_connection.commit()
 
     with closing(get_connection(database_path)) as connection:
         locked_run_id = requested_run_id or get_latest_locked_run_id(connection)
@@ -45,6 +66,7 @@ def build_research_dossiers(
             else []
         )
         for locked_topic in locked_topics:
+            topic_id = int(locked_topic["topic_id"])
             context = get_locked_topic_context(connection, int(locked_topic["id"]))
             dossier = build_local_dossier(context)
             if perplexity_research.ACTIVE_RESEARCH_PROVIDER == "approved_source_only":
@@ -68,6 +90,7 @@ def build_research_dossiers(
                 source_urls_json=json.dumps(source_urls, indent=2),
             )
             dossiers_created += 1
+            completed_shadow.append((topic_id, dossier))
 
         summary = ResearchSummary(
             run_id=run_id,
@@ -83,14 +106,30 @@ def build_research_dossiers(
             json.dumps(summary.__dict__),
         )
         connection.commit()
-        return summary
+    if lifecycle:
+        adapter = PerplexityEvidenceAdapter()
+        for topic_id, dossier in completed_shadow:
+            try:
+                case = lifecycle.cases.get_by_topic_id(topic_id)
+                if not case:
+                    raise ValueError(f"Case for topic {topic_id} not found")
+                qualifying_urls = {str(article.get("article_url")) for article in dossier.get("source_articles", []) if article.get("article_url")}
+                pack = adapter.build(case_id=case.case_id, dossier=dossier, qualifying_urls=qualifying_urls)
+                lifecycle.store_evidence(topic_id, pack, run_id=run_id)
+            except Exception as exc:
+                with closing(get_connection(database_path)) as connection:
+                    log_run_event(connection, run_id, "case_shadow_research", "error", f"Evidence shadow write failed for topic {topic_id}: {exc}", json.dumps({"run_id":run_id,"topic_id":topic_id,"stage":"research_complete","error_type":type(exc).__name__}))
+                    connection.commit()
+    return summary
 
 
-def apply_saved_research_provider_settings(database_path=DATABASE_PATH) -> None:
+def apply_saved_research_provider_settings(database_path=DATABASE_PATH, *, secret_provider=None) -> None:
     settings = load_research_settings(database_path=database_path)
     engine = get_research_engine_by_key(settings.get("provider_key"))
-    api_key = str(settings.get("api_key") or "").strip()
-    if not api_key and engine.get("env_var"):
+    api_key = ""
+    if engine["key"] == "perplexity":
+        api_key = (secret_provider or build_secret_provider(database_path)).resolve("PERPLEXITY_API_KEY").value or ""
+    elif engine.get("env_var"):
         api_key = os.getenv(engine["env_var"], "").strip()
     perplexity_research.ACTIVE_RESEARCH_PROVIDER = engine["key"]
     perplexity_research.PERPLEXITY_API_KEY = api_key if engine["key"] == "perplexity" else ""

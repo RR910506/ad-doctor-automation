@@ -10,6 +10,7 @@ from typing import Any
 
 from src.config import DATABASE_PATH
 from src.db import get_connection, initialize_database
+from src.security.resolver import build_secret_provider
 
 
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -49,14 +50,16 @@ class NotificationSummary:
     skipped_reason: str | None = None
 
 
-def load_smtp_settings(database_path=DATABASE_PATH) -> SmtpSettings:
+def load_smtp_settings(database_path=DATABASE_PATH, *, secret_provider=None) -> SmtpSettings:
     saved = load_saved_smtp_settings(database_path=database_path)
+    secrets = secret_provider or build_secret_provider(database_path)
+    host=secrets.resolve("SMTP_HOST"); port=secrets.resolve("SMTP_PORT"); username=secrets.resolve("SMTP_USERNAME"); password=secrets.resolve("SMTP_PASSWORD"); from_email=secrets.resolve("SMTP_FROM_EMAIL")
     return SmtpSettings(
-        host=saved.get("smtp_host") or os.getenv("AD_DOCTOR_SMTP_HOST") or None,
-        port=int(saved.get("smtp_port") or os.getenv("AD_DOCTOR_SMTP_PORT") or "587"),
-        username=saved.get("smtp_username") or os.getenv("AD_DOCTOR_SMTP_USERNAME") or None,
-        password=saved.get("smtp_password") or os.getenv("AD_DOCTOR_SMTP_PASSWORD") or None,
-        from_email=saved.get("smtp_from") or os.getenv("AD_DOCTOR_SMTP_FROM") or None,
+        host=host.value,
+        port=int(port.value or "587"),
+        username=username.value,
+        password=password.value,
+        from_email=from_email.value,
         use_tls=parse_bool(saved.get("use_tls"), default_env=os.getenv("AD_DOCTOR_SMTP_USE_TLS")),
         source="saved" if saved else "environment",
     )
@@ -94,39 +97,24 @@ def save_smtp_settings(
     database_path=DATABASE_PATH,
 ) -> SmtpSettings:
     initialize_database(database_path=database_path)
-    existing = load_saved_smtp_settings(database_path=database_path)
-    password_to_store = (smtp_password or "").strip()
-    if keep_existing_password and not password_to_store:
-        password_to_store = str(existing.get("smtp_password") or "")
+    from src.security.resolver import configure_runtime_secret
+    for key, value in {
+        "SMTP_HOST": smtp_host, "SMTP_PORT": smtp_port, "SMTP_USERNAME": smtp_username,
+        "SMTP_PASSWORD": smtp_password, "SMTP_FROM_EMAIL": smtp_from,
+    }.items():
+        configure_runtime_secret(database_path, key, value)
+    # Secret-bearing SMTP fields are now read-only legacy compatibility data.
+    # New configuration actions persist only the public TLS preference.
     with closing(get_connection(database_path)) as connection:
         connection.execute(
             """
-            INSERT INTO email_settings (
-                id,
-                smtp_host,
-                smtp_port,
-                smtp_username,
-                smtp_password,
-                smtp_from,
-                use_tls,
-                updated_at
-            )
-            VALUES (1, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            INSERT INTO email_settings (id, use_tls, updated_at)
+            VALUES (1, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(id) DO UPDATE SET
-                smtp_host = excluded.smtp_host,
-                smtp_port = excluded.smtp_port,
-                smtp_username = excluded.smtp_username,
-                smtp_password = excluded.smtp_password,
-                smtp_from = excluded.smtp_from,
                 use_tls = excluded.use_tls,
                 updated_at = CURRENT_TIMESTAMP
             """,
             (
-                smtp_host.strip() or None,
-                int(smtp_port),
-                (smtp_username or "").strip() or None,
-                password_to_store or None,
-                smtp_from.strip() or None,
                 1 if use_tls else 0,
             ),
         )

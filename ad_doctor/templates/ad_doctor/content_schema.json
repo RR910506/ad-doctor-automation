@@ -1,0 +1,1 @@
+{"schema_version":"1.0","required":["symptoms","patient_history","diagnosis","treatment","results","prescription","doctors_opinion","claims","carousel"],"claim_classifications":["verified_fact","source_claim","strategic_inference","doctor_opinion","unknown"]}

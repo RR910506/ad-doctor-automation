@@ -1,0 +1,16 @@
+Hello {{name}},
+
+A new case has entered The Ad Doctor's examination room.
+
+{{title}}
+
+The Diagnosis:
+{{diagnosis}}
+
+Read the complete diagnosis:
+{{document_url}}
+
+The Ad Doctor
+Marketing examined. Strategy diagnosed.
+
+Unsubscribe: {{unsubscribe_url}}

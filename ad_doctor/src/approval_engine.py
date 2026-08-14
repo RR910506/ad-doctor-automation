@@ -31,6 +31,7 @@ def set_content_approval(
     reviewer_notes: str | None = None,
     database_path=DATABASE_PATH,
     run_id: str | None = None,
+    reviewer_id: str = "legacy_editor",
 ) -> ApprovalSummary:
     if status not in VALID_APPROVAL_STATUSES:
         raise ValueError(f"Invalid approval status: {status}")
@@ -54,7 +55,17 @@ def set_content_approval(
             json.dumps(summary.__dict__),
         )
         connection.commit()
-        return summary
+    # Legacy is deliberately committed first. Shadow failures are isolated and
+    # recorded without changing the successful legacy result.
+    from src.services.legacy_approval_compatibility import LegacyApprovalCompatibilityService
+    LegacyApprovalCompatibilityService(database_path).mirror_committed(
+        content_output_id=content_output_id,
+        legacy_status=status,
+        reviewer_id=reviewer_id,
+        reviewer_notes=reviewer_notes,
+        run_id=run_id,
+    )
+    return summary
 
 
 def get_approval_queue(database_path=DATABASE_PATH):

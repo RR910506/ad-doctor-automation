@@ -27,6 +27,8 @@ from src.settings_engine import (
     parse_json_list,
 )
 from src.topic_matcher import is_same_news_event, topic_similarity
+from src.case_files import get_case_lifecycle_service
+from src.domain.workflow import WorkflowStatus
 
 
 @dataclass(frozen=True)
@@ -108,6 +110,23 @@ def generate_content_outputs(
     framework_settings = load_content_framework_settings(database_path=database_path)
     blog_count = 0
     social_count = 0
+    lifecycle = get_case_lifecycle_service(database_path)
+    completed_shadow: list[tuple[int, int]] = []
+    if lifecycle:
+        with closing(get_connection(database_path)) as shadow_connection:
+            shadow_locked_run_id = requested_run_id or get_latest_locked_run_id(shadow_connection)
+            shadow_topic_rows = shadow_connection.execute(
+                "SELECT DISTINCT lt.topic_id FROM locked_topics lt JOIN dissection_outputs d ON d.locked_topic_id=lt.id WHERE lt.run_id=?",
+                (shadow_locked_run_id,),
+            ).fetchall() if shadow_locked_run_id else []
+        for shadow_row in shadow_topic_rows:
+            topic_id = int(shadow_row["topic_id"])
+            try:
+                lifecycle.transition_topic(topic_id, WorkflowStatus.CONTENT_PENDING, run_id=run_id, stage="content", reason="Content generation started.")
+            except Exception as exc:
+                with closing(get_connection(database_path)) as error_connection:
+                    log_run_event(error_connection, run_id, "case_shadow_content", "error", f"Content-start shadow transition failed for topic {topic_id}: {exc}", json.dumps({"run_id":run_id,"topic_id":topic_id,"stage":"content_start","error_type":type(exc).__name__}))
+                    error_connection.commit()
 
     with closing(get_connection(database_path)) as connection:
         locked_run_id = requested_run_id or get_latest_locked_run_id(connection)
@@ -127,6 +146,8 @@ def generate_content_outputs(
         }
         for dissection in dissections:
             locked_topic_id = int(dissection["locked_topic_id"])
+            topic_row = connection.execute("SELECT topic_id FROM locked_topics WHERE id = ?", (locked_topic_id,)).fetchone()
+            topic_id = int(topic_row["topic_id"]) if topic_row else 0
             dossier = dossiers_by_locked_topic_id.get(locked_topic_id, {})
             social_draft = build_social_draft(
                 dossier,
@@ -164,14 +185,14 @@ def generate_content_outputs(
             )
             blog_draft = blog_writer.draft_markdown
             social_draft = social_writer.draft_markdown
-            insert_content_output(
+            blog_id = insert_content_output(
                 connection,
                 locked_topic_id=locked_topic_id,
                 content_type="blog",
                 template_version=blog_template_path.name,
                 draft_markdown=blog_draft,
             )
-            insert_content_output(
+            social_id = insert_content_output(
                 connection,
                 locked_topic_id=locked_topic_id,
                 content_type="social",
@@ -180,6 +201,8 @@ def generate_content_outputs(
             )
             blog_count += 1
             social_count += 1
+            if topic_id:
+                completed_shadow.append((topic_id, int(social_id or blog_id)))
 
         summary = ContentGenerationSummary(
             run_id=run_id,
@@ -210,7 +233,17 @@ def generate_content_outputs(
             ),
         )
         connection.commit()
-        return summary
+    if lifecycle:
+        for topic_id, draft_id in completed_shadow:
+            try:
+                lifecycle.link_draft(topic_id, draft_id, run_id=run_id)
+                from src.services.legacy_content_quality_shadow import LegacyContentQualityShadowService
+                LegacyContentQualityShadowService(database_path).mirror(topic_id,draft_id,run_id)
+            except Exception as exc:
+                with closing(get_connection(database_path)) as connection:
+                    log_run_event(connection, run_id, "case_shadow_content", "error", f"Draft-link shadow transition failed for topic {topic_id}: {exc}", json.dumps({"run_id":run_id,"topic_id":topic_id,"stage":"content_complete","draft_id":draft_id,"error_type":type(exc).__name__}))
+                    connection.commit()
+    return summary
 
 
 def is_rejected_social_draft(draft_markdown: str) -> bool:

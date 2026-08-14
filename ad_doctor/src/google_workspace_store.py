@@ -9,6 +9,7 @@ from typing import Any
 
 from src.config import DATABASE_PATH
 from src.notification_engine import list_notification_recipients
+from src.security.resolver import build_secret_provider
 
 
 SHEETS_SCOPES = (
@@ -150,7 +151,7 @@ def list_google_workspace_drafts() -> list[dict[str, Any]]:
     return sorted(drafts, key=lambda draft: str(draft.get("created_at") or ""), reverse=True)
 
 
-def build_google_services():
+def build_google_services(*, secret_provider=None):
     try:
         from google.oauth2 import service_account
         from googleapiclient.discovery import build
@@ -159,7 +160,7 @@ def build_google_services():
             "Google draft storage requires google-api-python-client and google-auth."
         ) from exc
 
-    credentials_info = load_service_account_info()
+    credentials_info = load_service_account_info(secret_provider=secret_provider)
     credentials = service_account.Credentials.from_service_account_info(
         credentials_info,
         scopes=list(SHEETS_SCOPES),
@@ -170,11 +171,12 @@ def build_google_services():
     return sheets_service, docs_service, drive_service
 
 
-def load_service_account_info() -> dict[str, Any]:
-    raw_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
+def load_service_account_info(*, secret_provider=None) -> dict[str, Any]:
+    provider=secret_provider or build_secret_provider()
+    raw_json = provider.resolve("GOOGLE_SERVICE_ACCOUNT_JSON").value or ""
     if raw_json:
         return json.loads(raw_json)
-    json_path = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "").strip()
+    json_path = provider.resolve("GOOGLE_SERVICE_ACCOUNT_FILE").value or ""
     if json_path:
         return json.loads(Path(json_path).read_text(encoding="utf-8"))
     raise RuntimeError(
