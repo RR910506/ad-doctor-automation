@@ -60,6 +60,17 @@ def import_sources() -> None:
     raise NotImplementedError("Use import_sources_from_file, import_sources_from_google_sheet, or import_sources_from_dataframe.")
 
 
+def set_source_active(source_id: int, active: bool, database_path: Path = DATABASE_PATH) -> bool:
+    """Change one source status; called by an explicit, confirmed UI action."""
+    with closing(get_connection(database_path)) as connection:
+        changed = connection.execute(
+            "UPDATE sources SET active_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (1 if active else 0, int(source_id)),
+        ).rowcount
+        connection.commit()
+    return bool(changed)
+
+
 def import_sources_from_file(
     file: str | Path | BinaryIO,
     filename: str | None = None,

@@ -17,4 +17,12 @@ def render(st, service, actions):
     st.subheader('Recent runs')
     for item in vm.history:
         st.write(f'**{item.title}** · {item.subtitle} · {item.meta}')
-    st.button('Run automation now', disabled=True, help='Confirmation and live action remain in Legacy Workspace during Phase 4A.')
+    confirmed = st.checkbox('I understand this starts a live automation run', key='confirm_manual_automation')
+    if st.button('Run automation now', type='primary', disabled=not confirmed):
+        with st.spinner('Running the existing Ad Doctor pipeline…'):
+            result = actions.run_automation_now(confirmed=confirmed)
+        (st.success if result.success else st.error)(result.user_message)
+        if result.run_id:
+            st.caption(f'Run ID: {result.run_id}')
+        if result.success and result.refresh_required:
+            st.rerun()

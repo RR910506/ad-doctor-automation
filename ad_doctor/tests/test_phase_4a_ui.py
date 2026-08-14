@@ -27,7 +27,7 @@ class DesignNavigationTests(unittest.TestCase):
  def test_route_resolution(self):self.assertEqual(resolve_page('cases'),'cases');self.assertEqual(resolve_page('unknown'),'dashboard');self.assertEqual(resolve_page('legacy'),'legacy')
 class FixtureFilteringTests(unittest.TestCase):
  def test_demo_defaults_false_and_is_in_memory(self):self.assertFalse(demo_mode_enabled({}));service=UIQueryService(demo=True);self.assertTrue(service.demo);self.assertIsNotNone(service.get('dashboard'))
- def test_non_demo_has_guided_empty_models(self):self.assertEqual(UIQueryService(demo=False).get('sources'),())
+ def test_non_demo_uses_live_production_adapter(self):self.assertTrue(UIQueryService(demo=False).get('sources'))
  def test_fixture_states_are_safe_and_explicit(self):
   self.assertEqual(UIQueryService(demo=True,state='empty').get('sources'),())
   self.assertEqual(UIQueryService(demo=True,state='loading').state,'loading')

@@ -22,6 +22,19 @@ def render(st, service, actions):
     with tabs[0]:
         st.write('Ad Doctor · Marketing intelligence and opinion platform')
         st.caption('Human approval is mandatory before publishing or delivery.')
+        if not service.demo:
+            st.markdown('#### Workspace capabilities')
+            labels = {
+                'legacy_pipeline_available': 'Legacy pipeline',
+                'case_files_available': 'Case architecture',
+                'structured_content_available': 'Structured content',
+                'publishing_available': 'Publishing',
+                'subscribers_available': 'Subscriber delivery',
+            }
+            for key, label in labels.items():
+                available = service.capabilities.get(key, False)
+                state = 'Active' if key == 'legacy_pipeline_available' and available else 'Available' if available else 'Not activated'
+                st.write(f'**{label}:** {state}')
     with tabs[1]:
         st.info('The diagnosis-led editorial framework is active. Research and content generation remain separate stages.')
     with tabs[2]:
@@ -34,7 +47,7 @@ def render(st, service, actions):
     with tabs[5]:
         _provider(st, by_name['Email'], 'Replacement SMTP password')
     with tabs[6]:
-        st.info('Automation settings are view-only in Phase 4A. No scheduler or worker is started by this page.')
+        st.info('Automation settings are view-only here. No scheduler or worker is started by opening this page.')
     with tabs[7]:
         st.info('Secrets are replacement-only inputs. Existing values are never rendered or prefilled.')
     with tabs[8]:

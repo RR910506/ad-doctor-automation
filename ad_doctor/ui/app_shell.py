@@ -25,7 +25,9 @@ def render_app():
  service=UIQueryService(state=fixture_state);actions=UIActionService()
  with st.sidebar:
   st.markdown('<div class="ad-kicker">THE AD DOCTOR</div><h2>Content Intelligence</h2>',unsafe_allow_html=True)
-  if service.demo_label:st.info(service.demo_label,icon='🧪')
+  if service.demo_label:
+   if service.demo:st.info(service.demo_label,icon='🧪')
+   else:st.success(service.demo_label)
   choices=[]
   for group,items in GROUPS.items():
    st.caption(group);choices.extend(items)
