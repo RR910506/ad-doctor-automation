@@ -10,6 +10,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from src.config import DATABASE_PATH
+from src.case_files import get_case_files_mode
 from src.security.redaction import redact
 from ui.repositories import DatabaseCapabilities, UIReadRepository
 from ui.view_models import (
@@ -128,11 +129,13 @@ class ProductionUIDataSource:
         elif latest_fetch:
             new_articles = r.scalar("SELECT COUNT(*) FROM articles WHERE date(fetch_timestamp)=date(?)", (latest_fetch,))
         candidate = r.scalar("SELECT COUNT(*) FROM topics WHERE lower(status) NOT IN ('qualified','rejected')")
-        qualified = r.scalar("SELECT COUNT(*) FROM topics t WHERE lower(t.status)='qualified' AND (SELECT COUNT(DISTINCT ts.source_id) FROM topic_sources ts JOIN sources s ON s.id=ts.source_id AND s.active_status=1 WHERE ts.topic_id=t.id)>=3") if r.has_table("topic_sources") else 0
+        case_count = r.scalar("SELECT COUNT(*) FROM cases") if self.capabilities.case_files_available else 0
+        cases_activated = case_count > 0
+        qualified = r.scalar("SELECT COUNT(*) FROM cases WHERE lower(qualification_status)='qualified' AND unique_publication_count>=3") if cases_activated else (r.scalar("SELECT COUNT(*) FROM topics t WHERE lower(t.status)='qualified' AND (SELECT COUNT(DISTINCT ts.source_id) FROM topic_sources ts JOIN sources s ON s.id=ts.source_id AND s.active_status=1 WHERE ts.topic_id=t.id)>=3") if r.has_table("topic_sources") else 0)
         awaiting = r.scalar("SELECT COUNT(*) FROM topics t WHERE lower(t.status)!='rejected' AND (SELECT COUNT(DISTINCT ts.source_id) FROM topic_sources ts JOIN sources s ON s.id=ts.source_id AND s.active_status=1 WHERE ts.topic_id=t.id)=2") if r.has_table("topic_sources") else 0
         research = r.scalar("SELECT COUNT(*) FROM research_dossiers") if r.has_table("research_dossiers") else None
         drafts = r.scalar("SELECT COUNT(*) FROM content_outputs") if r.has_table("content_outputs") else None
-        pending = r.scalar("SELECT COUNT(*) FROM content_outputs WHERE lower(COALESCE(approval_status,'pending'))='pending'") if r.has_table("content_outputs") else None
+        pending = r.scalar("SELECT COUNT(*) FROM cases WHERE lower(COALESCE(approval_status,'pending'))='pending'") if cases_activated else (r.scalar("SELECT COUNT(*) FROM content_outputs WHERE lower(COALESCE(approval_status,'pending'))='pending'") if r.has_table("content_outputs") else None)
         failed = r.scalar("SELECT COUNT(*) FROM automation_run_history WHERE lower(status) IN ('failed','timed_out')") if r.has_table("automation_run_history") else r.scalar("SELECT COUNT(*) FROM run_logs WHERE lower(event_type) IN ('error','failed')")
         settings = self.automation()
         health = {
@@ -140,7 +143,7 @@ class ProductionUIDataSource:
             "Scheduler": "Enabled" if settings and settings.enabled else "Paused",
             "Research provider": self._provider_status("research"),
             "Content provider": self._provider_status("content"),
-            "Case architecture": "Available" if self.capabilities.case_files_available else "Not activated",
+            "Case architecture": "Shadow enabled" if self.capabilities.case_files_available and get_case_files_mode() == "shadow" else "Available" if self.capabilities.case_files_available else "Not activated",
             "Publishing": "Available" if self.capabilities.publishing_available else "Not activated",
         }
         attention = []
@@ -155,7 +158,7 @@ class ProductionUIDataSource:
                 "Articles scanned": str(article_count),
                 "New articles": str(new_articles),
                 "Candidate topics": str(candidate),
-                "Qualified topics": str(qualified),
+                "Qualified cases" if cases_activated else "Qualified topics": str(qualified),
                 "Awaiting third publication": str(awaiting),
                 "Research completed": "Not activated" if research is None else str(research),
                 "Content drafts": "Not activated" if drafts is None else str(drafts),

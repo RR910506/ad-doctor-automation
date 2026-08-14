@@ -33,7 +33,7 @@ def render(st, service, actions):
             }
             for key, label in labels.items():
                 available = service.capabilities.get(key, False)
-                state = 'Active' if key == 'legacy_pipeline_available' and available else 'Available' if available else 'Not activated'
+                state = 'Shadow enabled' if key == 'case_files_available' and available and service.capabilities.get('case_mode') == 'shadow' else 'Active' if key == 'legacy_pipeline_available' and available else 'Available' if available else 'Not activated'
                 st.write(f'**{label}:** {state}')
     with tabs[1]:
         st.info('The diagnosis-led editorial framework is active. Research and content generation remain separate stages.')

@@ -5,6 +5,7 @@ import os
 import re
 
 from src.config import DATABASE_PATH
+from src.case_files import get_case_files_mode
 from src.security.redaction import redact
 from ui.components.pagination import paginate
 from ui.fixture_data import demo_payload
@@ -36,7 +37,9 @@ class UIQueryService:
 
     @property
     def capabilities(self):
-        return {} if self.demo else self._production.capabilities.as_dict()
+        if self.demo:
+            return {}
+        return {**self._production.capabilities.as_dict(), "case_mode": get_case_files_mode()}
 
     def get(self, page):
         return self._payload.get(page, ()) if self.demo else self._production.get(page)
