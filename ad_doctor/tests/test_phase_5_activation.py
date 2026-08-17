@@ -18,8 +18,11 @@ from src.domain.case_file import stable_case_id
 from src.production_activation import (
     activate_production_backfill,
     assess_production_backfill,
+    correct_case_qualification_independence,
     set_shadow_mode_in_dotenv,
 )
+from src.domain.case_file import ContentType
+from src.domain.errors import DomainValidationError
 from ui.services.ui_query_service import UIQueryService
 
 
@@ -146,6 +149,33 @@ class Phase5ActivationTests(unittest.TestCase):
             self.assertEqual(dashboard.metrics["Qualified cases"], "1")
             self.assertEqual(dashboard.health["Case architecture"], "Shadow enabled")
             self.assertEqual(service.capabilities["case_mode"], "shadow")
+
+    def test_independence_correction_preserves_nonqualifying_history(self) -> None:
+        activate_production_backfill(self.db)
+        with closing(get_connection(self.db)) as connection:
+            source_id = 99
+            connection.execute("INSERT INTO sources(id,source_name,website_url,active_status) VALUES(?,?,?,1)", (source_id, "Unrelated", "https://unrelated.example"))
+            article_id = connection.execute("INSERT INTO articles(source_id,source_name,source_url,article_url,headline,article_text) VALUES(?,?,?,?,?,?)", (source_id, "Unrelated", "https://unrelated.example", "https://unrelated.example/history", "Different event", "Different event")).lastrowid
+            connection.execute("INSERT INTO case_article_links(case_id,article_id,link_role,source_id,contributed_to_qualification,relevance_score) VALUES(?,?,?,?,1,1.0)", (stable_case_id(1), article_id, "exact_topic_evidence", source_id))
+            qualifying = {int(row[0]): f"Network {index}" for index, row in enumerate(connection.execute("SELECT article_id FROM case_article_links WHERE case_id=? AND article_id!=? ORDER BY article_id", (stable_case_id(1), article_id)), 1)}
+            connection.commit()
+        result = correct_case_qualification_independence(self.db, case_id=stable_case_id(1), contributing_articles=qualifying, brand="Brand", content_type=ContentType.MARKETING_DIAGNOSIS, actor_id="editor", run_id="live-test")
+        self.assertEqual(result["independent_publisher_count"], 3)
+        with closing(get_connection(self.db)) as connection:
+            case = dict(connection.execute("SELECT * FROM cases WHERE case_id=?", (stable_case_id(1),)).fetchone())
+            historical = dict(connection.execute("SELECT * FROM case_article_links WHERE article_id=?", (article_id,)).fetchone())
+            self.assertEqual(case["content_type"], "marketing_diagnosis")
+            self.assertEqual(case["campaign"], None)
+            self.assertEqual(case["unique_publication_count"], 3)
+            self.assertEqual(historical["contributed_to_qualification"], 0)
+            self.assertEqual(historical["link_role"], "historical_non_qualifying")
+
+    def test_independence_correction_rejects_duplicate_networks(self) -> None:
+        activate_production_backfill(self.db)
+        with closing(get_connection(self.db)) as connection:
+            ids = [int(row[0]) for row in connection.execute("SELECT article_id FROM case_article_links WHERE case_id=? ORDER BY article_id", (stable_case_id(1),))]
+        with self.assertRaises(DomainValidationError):
+            correct_case_qualification_independence(self.db, case_id=stable_case_id(1), contributing_articles={ids[0]: "Same", ids[1]: "Same", ids[2]: "Same"}, brand="Brand", content_type=ContentType.MARKETING_DIAGNOSIS, actor_id="editor", run_id="live-test")
 
 
 if __name__ == "__main__":

@@ -11,7 +11,8 @@ from uuid import uuid4
 from src.adapters.perplexity_evidence_adapter import PerplexityEvidenceAdapter
 from src.case_file_compat import map_legacy_topic_to_case
 from src.db import get_connection
-from src.domain.case_file import stable_case_id
+from src.domain.case_file import ContentType, stable_case_id
+from src.domain.errors import DomainValidationError
 from src.domain.workflow import ActorType
 from src.repositories.sqlite_case_repository import CASE_COLUMNS, SQLiteCaseRepository
 
@@ -61,6 +62,83 @@ class ProductionBackfillReport:
     approval_mappings: int
     structured_packages_created: int
     assessments: tuple[CandidateAssessment, ...]
+
+
+def correct_case_qualification_independence(
+    database_path: Path,
+    *,
+    case_id: str,
+    contributing_articles: dict[int, str],
+    brand: str | None,
+    content_type: ContentType,
+    actor_id: str,
+    run_id: str,
+) -> dict[str, object]:
+    """Correct qualification contribution flags without deleting historical links.
+
+    ``contributing_articles`` maps each exact-topic article ID to its independently
+    controlled publisher network. The network labels are stored only in the audit
+    event; no publisher-independence claim is inferred from source IDs.
+    """
+    normalized_networks = {value.strip().casefold() for value in contributing_articles.values() if value.strip()}
+    if len(contributing_articles) < 3 or len(normalized_networks) < 3:
+        raise DomainValidationError("Qualification requires three exact-topic articles from independent publisher networks")
+    if not actor_id.strip() or not run_id.strip():
+        raise DomainValidationError("actor_id and run_id are required")
+    article_ids = tuple(sorted(int(value) for value in contributing_articles))
+    with closing(get_connection(Path(database_path))) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        case = connection.execute("SELECT * FROM cases WHERE case_id=?", (case_id,)).fetchone()
+        if not case:
+            raise DomainValidationError("Case not found")
+        placeholders = ",".join("?" for _ in article_ids)
+        selected = connection.execute(
+            f"""SELECT cal.article_id,cal.source_id,s.active_status
+                FROM case_article_links cal JOIN sources s ON s.id=cal.source_id
+                WHERE cal.case_id=? AND cal.article_id IN ({placeholders})""",
+            (case_id, *article_ids),
+        ).fetchall()
+        if len(selected) != len(article_ids) or any(int(row["active_status"] or 0) != 1 for row in selected):
+            raise DomainValidationError("Every qualifying article must already be linked and belong to an active approved source")
+        if len({int(row["source_id"]) for row in selected}) != len(article_ids):
+            raise DomainValidationError("Qualifying articles must use distinct approved sources")
+        connection.execute(
+            "UPDATE case_article_links SET contributed_to_qualification=0,relevance_score=0.0,link_role='historical_non_qualifying' WHERE case_id=?",
+            (case_id,),
+        )
+        connection.execute(
+            f"UPDATE case_article_links SET contributed_to_qualification=1,relevance_score=1.0,link_role='exact_topic_evidence' WHERE case_id=? AND article_id IN ({placeholders})",
+            (case_id, *article_ids),
+        )
+        now = datetime.now(UTC).isoformat()
+        reason = "Qualification corrected to three exact-topic, independently controlled approved publisher networks."
+        changed = connection.execute(
+            """UPDATE cases SET brand=?,campaign=NULL,content_type=?,unique_publication_count=?,qualification_status='qualified',
+                   qualification_reason=?,rejection_reason=NULL,current_run_id=?,updated_at=?,version=version+1
+               WHERE case_id=? AND version=?""",
+            (brand.strip() if brand else None, content_type.value, len(normalized_networks), reason, run_id, now, case_id, int(case["version"])),
+        ).rowcount
+        if changed != 1:
+            raise DomainValidationError("Case changed during qualification correction")
+        connection.execute(
+            """INSERT INTO workflow_transitions(
+                   transition_id,case_id,from_status,to_status,actor_type,actor_id,reason,occurred_at,metadata_json
+               ) VALUES(?,?,?,?,?,?,?,?,?)""",
+            (
+                f"transition_{uuid4().hex}", case_id, case["workflow_status"], case["workflow_status"],
+                ActorType.EDITOR.value, actor_id.strip(), reason, now,
+                json.dumps({"run_id": run_id, "article_networks": {str(key): value for key, value in contributing_articles.items()}, "independent_publisher_count": len(normalized_networks)}),
+            ),
+        )
+        connection.commit()
+    return {
+        "case_id": case_id,
+        "contributing_article_ids": article_ids,
+        "independent_publisher_count": len(normalized_networks),
+        "brand": brand.strip() if brand else None,
+        "campaign": None,
+        "content_type": content_type.value,
+    }
 
 
 def assess_production_backfill(database_path: Path, policy: BackfillPolicy | None = None) -> ProductionBackfillReport:
