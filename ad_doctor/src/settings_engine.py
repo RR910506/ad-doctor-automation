@@ -11,6 +11,15 @@ from src.db import get_connection
 
 RESEARCH_ENGINE_OPTIONS: tuple[dict[str, str], ...] = (
     {
+        "key": "gemini",
+        "label": "Gemini Research",
+        "status": "Live grounded research",
+        "api_key_label": "Gemini API key",
+        "model": "gemini-2.5-flash",
+        "endpoint": "https://generativelanguage.googleapis.com",
+        "env_var": "GEMINI_API_KEY",
+    },
+    {
         "key": "perplexity",
         "label": "Perplexity",
         "status": "Live deep research",
@@ -27,15 +36,6 @@ RESEARCH_ENGINE_OPTIONS: tuple[dict[str, str], ...] = (
         "model": "gpt-4.1",
         "endpoint": "https://api.openai.com/v1/responses",
         "env_var": "OPENAI_API_KEY",
-    },
-    {
-        "key": "gemini_grounding",
-        "label": "Google Gemini Search",
-        "status": "Research-ready provider slot",
-        "api_key_label": "Gemini API key",
-        "model": "gemini-1.5-pro",
-        "endpoint": "https://generativelanguage.googleapis.com",
-        "env_var": "GEMINI_API_KEY",
     },
     {
         "key": "tavily",
@@ -122,9 +122,9 @@ RESEARCH_ENGINE_OPTIONS: tuple[dict[str, str], ...] = (
 
 
 DEFAULT_RESEARCH_SETTINGS = {
-    "provider_key": "approved_source_only",
-    "model": "local-approved-source-synthesis",
-    "endpoint": "",
+    "provider_key": "gemini",
+    "model": "gemini-2.5-flash",
+    "endpoint": "https://generativelanguage.googleapis.com",
     "api_key": "",
 }
 
@@ -285,8 +285,9 @@ def save_research_settings(
     database_path=DATABASE_PATH,
 ) -> dict[str, str]:
     from src.security.resolver import configure_runtime_secret
-    configure_runtime_secret(database_path, "PERPLEXITY_API_KEY", api_key)
     engine = get_research_engine_by_key(provider_key)
+    if engine.get("env_var"):
+        configure_runtime_secret(database_path, engine["env_var"], api_key)
     model = model.strip() or engine["model"]
     endpoint = endpoint.strip() or engine["endpoint"]
     with closing(get_connection(database_path)) as connection:

@@ -38,7 +38,9 @@ def render(st, service, actions):
     with tabs[1]:
         st.info('The diagnosis-led editorial framework is active. Research and content generation remain separate stages.')
     with tabs[2]:
-        _provider(st, by_name['Perplexity'], 'Replacement Perplexity API key')
+        _provider(st, by_name['Gemini Research'], 'Replacement Gemini API key')
+        st.write('**Model:** gemini-2.5-flash')
+        st.write('**Google Search grounding:** Enabled')
     with tabs[3]:
         _provider(st, by_name['OpenAI'], 'Replacement OpenAI API key')
     with tabs[4]:
@@ -52,4 +54,6 @@ def render(st, service, actions):
         st.info('Secrets are replacement-only inputs. Existing values are never rendered or prefilled.')
     with tabs[8]:
         st.warning('Advanced settings are visually separated and intended for administrators.')
+        if 'Perplexity' in by_name:
+            _provider(st, by_name['Perplexity'])
         st.link_button('Open Legacy Workspace', '?page=legacy')

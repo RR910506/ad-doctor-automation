@@ -23,6 +23,9 @@ from src.case_files import get_case_lifecycle_service
 from src.domain.workflow import WorkflowStatus
 from src.adapters.perplexity_evidence_adapter import PerplexityEvidenceAdapter
 from src.security.resolver import build_secret_provider
+from src.security.secret_provider import MissingSecretError
+from src.adapters.gemini_research_provider import GeminiResearchProvider, NormalizedResearchResult
+from src.adapters.gemini_evidence_adapter import GeminiEvidenceAdapter
 
 
 @dataclass(frozen=True)
@@ -36,11 +39,17 @@ def build_research_dossiers(
     database_path=DATABASE_PATH,
     run_id: str | None = None,
 ) -> ResearchSummary:
-    apply_saved_research_provider_settings(database_path=database_path)
+    provider_settings = apply_saved_research_provider_settings(database_path=database_path)
+    gemini_provider = None
+    if provider_settings["key"] == "gemini":
+        key = build_secret_provider(database_path).resolve("GEMINI_API_KEY")
+        if not key.configured or not key.value:
+            raise MissingSecretError("GEMINI_API_KEY is not configured")
+        gemini_provider = GeminiResearchProvider(api_key=key.value, model=provider_settings["model"])
     requested_run_id = run_id
     run_id = requested_run_id or datetime.now(UTC).strftime("run_%Y%m%d_%H%M%S")
     dossiers_created = 0
-    completed_shadow: list[tuple[int, dict[str, object]]] = []
+    completed_shadow: list[tuple[int, dict[str, object], NormalizedResearchResult | None]] = []
     lifecycle = get_case_lifecycle_service(database_path)
     if lifecycle:
         with closing(get_connection(database_path)) as shadow_connection:
@@ -69,7 +78,23 @@ def build_research_dossiers(
             topic_id = int(locked_topic["topic_id"])
             context = get_locked_topic_context(connection, int(locked_topic["id"]))
             dossier = build_local_dossier(context)
-            if perplexity_research.ACTIVE_RESEARCH_PROVIDER == "approved_source_only":
+            gemini_result = None
+            if provider_settings["key"] == "gemini":
+                gemini_result = gemini_provider.research(
+                    topic=str(dossier.get("topic") or ""),
+                    source_articles=list(dossier.get("source_articles") or []),
+                    research_brief="Investigate the marketing operating model beyond the triggering event; separate facts, source claims, inferences and unknowns.",
+                )
+                research_payload = {
+                    "status": "completed", "provider": gemini_result.provider, "model": gemini_result.model,
+                    "summary": str(gemini_result.structured.get("case_summary") or ""),
+                    "structured": gemini_result.structured,
+                    "source_links": [item.url for item in gemini_result.grounded_sources],
+                    "grounding_metadata": gemini_result.grounding_metadata, "usage": gemini_result.usage,
+                }
+                dossier["research_result"] = research_payload
+                dossier["research_mode"] = "gemini_google_search_grounded"
+            elif perplexity_research.ACTIVE_RESEARCH_PROVIDER == "approved_source_only":
                 research_payload = build_approved_source_only_research_payload(
                     str(dossier.get("topic") or ""),
                     list(dossier.get("source_articles") or []),
@@ -79,8 +104,9 @@ def build_research_dossiers(
                     str(dossier.get("topic") or ""),
                     list(dossier.get("source_articles") or []),
                 )
-            dossier["perplexity_research"] = research_payload
-            if research_payload.get("status") == "completed":
+            if provider_settings["key"] != "gemini":
+                dossier["perplexity_research"] = research_payload
+            if research_payload.get("status") == "completed" and provider_settings["key"] == "perplexity":
                 dossier["research_mode"] = "perplexity_augmented"
             source_urls = dossier["source_urls"]
             upsert_research_dossier(
@@ -90,7 +116,7 @@ def build_research_dossiers(
                 source_urls_json=json.dumps(source_urls, indent=2),
             )
             dossiers_created += 1
-            completed_shadow.append((topic_id, dossier))
+            completed_shadow.append((topic_id, dossier, gemini_result))
 
         summary = ResearchSummary(
             run_id=run_id,
@@ -107,14 +133,16 @@ def build_research_dossiers(
         )
         connection.commit()
     if lifecycle:
-        adapter = PerplexityEvidenceAdapter()
-        for topic_id, dossier in completed_shadow:
+        for topic_id, dossier, gemini_result in completed_shadow:
             try:
                 case = lifecycle.cases.get_by_topic_id(topic_id)
                 if not case:
                     raise ValueError(f"Case for topic {topic_id} not found")
                 qualifying_urls = {str(article.get("article_url")) for article in dossier.get("source_articles", []) if article.get("article_url")}
-                pack = adapter.build(case_id=case.case_id, dossier=dossier, qualifying_urls=qualifying_urls)
+                if gemini_result is not None:
+                    pack = GeminiEvidenceAdapter().build(case_id=case.case_id, topic=case.canonical_topic, result=gemini_result, qualifying_urls=qualifying_urls)
+                else:
+                    pack = PerplexityEvidenceAdapter().build(case_id=case.case_id, dossier=dossier, qualifying_urls=qualifying_urls)
                 lifecycle.store_evidence(topic_id, pack, run_id=run_id)
             except Exception as exc:
                 with closing(get_connection(database_path)) as connection:
@@ -123,20 +151,19 @@ def build_research_dossiers(
     return summary
 
 
-def apply_saved_research_provider_settings(database_path=DATABASE_PATH, *, secret_provider=None) -> None:
+def apply_saved_research_provider_settings(database_path=DATABASE_PATH, *, secret_provider=None) -> dict[str, str]:
     settings = load_research_settings(database_path=database_path)
     engine = get_research_engine_by_key(settings.get("provider_key"))
     api_key = ""
-    if engine["key"] == "perplexity":
-        api_key = (secret_provider or build_secret_provider(database_path)).resolve("PERPLEXITY_API_KEY").value or ""
-    elif engine.get("env_var"):
-        api_key = os.getenv(engine["env_var"], "").strip()
+    if engine.get("env_var"):
+        api_key = (secret_provider or build_secret_provider(database_path)).resolve(engine["env_var"]).value or ""
     perplexity_research.ACTIVE_RESEARCH_PROVIDER = engine["key"]
     perplexity_research.PERPLEXITY_API_KEY = api_key if engine["key"] == "perplexity" else ""
     perplexity_research.PERPLEXITY_MODEL = str(settings.get("model") or engine["model"]).strip() or engine["model"]
     perplexity_research.PERPLEXITY_ENDPOINT = (
         str(settings.get("endpoint") or engine["endpoint"]).strip() or engine["endpoint"]
     )
+    return {**engine, "model": str(settings.get("model") or engine["model"]), "configured": "1" if bool(api_key) else "0"}
 
 
 def build_approved_source_only_research_payload(

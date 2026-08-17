@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from src.config import DATABASE_PATH
 from src.case_files import get_case_files_mode
 from src.security.redaction import redact
+from src.security.resolver import build_secret_provider
 from ui.repositories import DatabaseCapabilities, UIReadRepository
 from ui.view_models import (
     ArticleListItem,
@@ -427,8 +428,9 @@ class ProductionUIDataSource:
         content=self.repository.row("SELECT provider_key,model,enabled FROM content_writer_settings WHERE id=1") if self.repository.has_table("content_writer_settings") else None
         email_configured=bool(self.repository.scalar("SELECT COUNT(*) FROM email_settings WHERE COALESCE(smtp_host,'')<>'' AND COALESCE(smtp_username,'')<>''",default=0)) if self.repository.has_table("email_settings") else False
         google_configured=bool(os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
-        items=(ProviderHealthViewModel("Perplexity","connected" if research and research.get("provider_key")=="perplexity" else "not_configured",f"Research provider: {_text((research or {}).get('provider_key'),'Not configured')} · Model: {_text((research or {}).get('model'),'Not configured')}","Central settings" if research else "Not configured"),ProviderHealthViewModel("OpenAI","connected" if content and content.get("enabled") else "not_configured",f"Content provider: {_text((content or {}).get('provider_key'),'Not configured')} · Model: {_text((content or {}).get('model'),'Not configured')}","Central settings" if content else "Not configured"),ProviderHealthViewModel("Google Workspace","connected" if google_configured else "not_configured","Google Workspace is configured." if google_configured else "Google Workspace is not configured.","Environment status"),ProviderHealthViewModel("Email","connected" if email_configured else "not_configured","Email delivery is configured." if email_configured else "Email delivery is not configured.","Central settings"))
+        gemini=build_secret_provider(self.repository.database_path).resolve("GEMINI_API_KEY")
+        items=(ProviderHealthViewModel("Gemini Research","connected" if gemini.configured else "not_configured",f"Research provider: gemini · Model: gemini-2.5-flash · Google Search grounding: Enabled · Gemini API: {'Configured' if gemini.configured else 'Not configured'}",gemini.source),ProviderHealthViewModel("Perplexity","alternative", "Historical compatibility only; not required for production research.","Advanced"),ProviderHealthViewModel("OpenAI","connected" if content and content.get("enabled") else "not_configured",f"Content provider: {_text((content or {}).get('provider_key'),'Not configured')} · Model: {_text((content or {}).get('model'),'Not configured')}","Central settings" if content else "Not configured"),ProviderHealthViewModel("Google Workspace","connected" if google_configured else "not_configured","Google Workspace is configured." if google_configured else "Google Workspace is not configured.","Environment status"),ProviderHealthViewModel("Email","connected" if email_configured else "not_configured","Email delivery is configured." if email_configured else "Email delivery is not configured.","Central settings"))
         return items
 
     def _provider_status(self,kind):
-        items={item.name:item.status for item in self.settings()};return "Connected" if items["Perplexity" if kind=="research" else "OpenAI"]=="connected" else "Not configured"
+        items={item.name:item.status for item in self.settings()};return "Connected" if items["Gemini Research" if kind=="research" else "OpenAI"]=="connected" else "Not configured"

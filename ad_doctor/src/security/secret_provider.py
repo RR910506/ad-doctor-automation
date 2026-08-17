@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-SECRET_KEYS=frozenset({"PERPLEXITY_API_KEY","OPENAI_API_KEY","GOOGLE_SERVICE_ACCOUNT_JSON","GOOGLE_SERVICE_ACCOUNT_FILE","SMTP_HOST","SMTP_PORT","SMTP_USERNAME","SMTP_PASSWORD","SMTP_FROM_EMAIL"})
+SECRET_KEYS=frozenset({"GEMINI_API_KEY","PERPLEXITY_API_KEY","OPENAI_API_KEY","GOOGLE_SERVICE_ACCOUNT_JSON","GOOGLE_SERVICE_ACCOUNT_FILE","SMTP_HOST","SMTP_PORT","SMTP_USERNAME","SMTP_PASSWORD","SMTP_FROM_EMAIL"})
 PLACEHOLDERS={"changeme","change-me","placeholder","your-key","your_api_key","none","null"}
 
 def valid_secret(value: object)->bool:
@@ -18,4 +18,3 @@ class SecretProvider(Protocol):
     def resolve(self,key:str)->SecretResult: ...
 
 class MissingSecretError(RuntimeError): pass
-
