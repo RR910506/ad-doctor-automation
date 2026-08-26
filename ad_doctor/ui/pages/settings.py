@@ -42,7 +42,10 @@ def render(st, service, actions):
         st.write('**Model:** gemini-2.5-flash')
         st.write('**Google Search grounding:** Enabled')
     with tabs[3]:
-        _provider(st, by_name['OpenAI'], 'Replacement OpenAI API key')
+        _provider(st, by_name['Gemini Content'])
+        st.write('**Grounding:** Disabled')
+        _provider(st, by_name['Gemini Quality'])
+        st.write('**Grounding:** Disabled')
     with tabs[4]:
         _provider(st, by_name['Google Workspace'])
         st.file_uploader('Replacement Google service-account file', type=['json'], disabled=True, help='Existing service-account JSON is never displayed.')
@@ -56,4 +59,6 @@ def render(st, service, actions):
         st.warning('Advanced settings are visually separated and intended for administrators.')
         if 'Perplexity' in by_name:
             _provider(st, by_name['Perplexity'])
+        if 'OpenAI (optional)' in by_name:
+            _provider(st, by_name['OpenAI (optional)'])
         st.link_button('Open Legacy Workspace', '?page=legacy')

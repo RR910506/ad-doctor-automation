@@ -2,12 +2,13 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import UTC,datetime
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol,runtime_checkable
 from src.domain.content_package import ContentPackage
 from src.domain.errors import DomainValidationError
 from src.domain.evidence_pack import EvidencePack
 from src.repositories.sqlite_content_package_repository import SQLiteContentPackageRepository
 from src.services.prompt_loader import PromptLoader
+@runtime_checkable
 class StructuredContentProvider(Protocol):
  provider_name:str;model_name:str
  def generate(self,*,case,evidence:dict,framework:dict,configuration:dict,prompts:dict)->dict:...

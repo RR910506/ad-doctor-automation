@@ -18,7 +18,7 @@ from src.settings_engine import load_content_writer_settings, save_content_write
 
 
 class OpenAIContentWriterTest(unittest.TestCase):
-    def test_missing_key_falls_back_to_local_framework_draft(self) -> None:
+    def test_optional_openai_writer_is_disabled_by_gemini_default(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             database_path = Path(temporary_directory) / "ad_doctor.db"
             initialize_database(
@@ -35,7 +35,7 @@ class OpenAIContentWriterTest(unittest.TestCase):
                     database_path=database_path,
                 )
 
-        self.assertEqual(result.status, "unavailable")
+        self.assertEqual(result.status, "disabled")
         self.assertIn("Local carousel draft", result.draft_markdown)
         self.assertIn("Content Writing Mode: Local framework generator", result.draft_markdown)
 

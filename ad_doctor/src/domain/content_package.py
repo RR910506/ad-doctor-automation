@@ -51,10 +51,11 @@ class ContentPackage:
    if set(s.supporting_claim_ids)-claim_ids:raise DomainValidationError(f'Slide {s.slide_number} references unknown claims')
  def validate_against(self,evidence:EvidencePack)->None:
   if evidence.evidence_pack_id!=self.evidence_pack_id or evidence.case_id!=self.case_id:raise DomainValidationError('Invalid Evidence Pack linkage')
-  sources={s.source_id for s in evidence.source_catalog};items={i.evidence_id for i in evidence.all_items()};contradictions={i.evidence_id for i in evidence.contradictions}
+  sources={s.source_id for s in evidence.source_catalog};items={i.evidence_id for i in evidence.all_items()};contradictions={i.evidence_id for i in evidence.contradictions};verified_items={i.evidence_id for i in evidence.verified_facts+evidence.results_evidence}
   for c in self.claims:
    if set(c.source_ids)-sources:raise DomainValidationError(f'Claim {c.claim_id} references unknown source IDs')
    if set(c.evidence_item_ids)-items:raise DomainValidationError(f'Claim {c.claim_id} references unknown evidence IDs')
+   if c.classification==ClaimClassification.VERIFIED_FACT and set(c.evidence_item_ids)-verified_items:raise DomainValidationError(f'Claim {c.claim_id} presents non-verified evidence as fact')
    if c.classification==ClaimClassification.VERIFIED_FACT and set(c.evidence_item_ids)&contradictions:raise DomainValidationError(f'Claim {c.claim_id} relies on unresolved contradiction')
   for s in self.carousel:
    if set(s.supporting_source_ids)-sources:raise DomainValidationError(f'Slide {s.slide_number} references unknown source IDs')

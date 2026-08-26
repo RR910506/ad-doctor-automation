@@ -129,10 +129,10 @@ DEFAULT_RESEARCH_SETTINGS = {
 }
 
 DEFAULT_CONTENT_WRITER_SETTINGS = {
-    "provider_key": "openai",
+    "provider_key": "gemini",
     "enabled": "1",
-    "model": "gpt-4.1-mini",
-    "endpoint": "https://api.openai.com/v1",
+    "model": "gemini-2.5-flash",
+    "endpoint": "https://generativelanguage.googleapis.com",
     "api_key": "",
 }
 
@@ -323,7 +323,8 @@ def load_content_writer_settings(database_path=DATABASE_PATH) -> dict[str, str]:
     settings = dict(DEFAULT_CONTENT_WRITER_SETTINGS)
     settings.update({key: str(row[key] if row[key] is not None else "") for key in row.keys()})
     from src.security.resolver import build_secret_provider
-    settings["api_key"] = build_secret_provider(database_path).resolve("OPENAI_API_KEY").value or ""
+    logical_key = "GEMINI_API_KEY" if settings.get("provider_key") == "gemini" else "OPENAI_API_KEY"
+    settings["api_key"] = build_secret_provider(database_path).resolve(logical_key).value or ""
     return settings
 
 
@@ -337,8 +338,8 @@ def save_content_writer_settings(
     database_path=DATABASE_PATH,
 ) -> dict[str, str]:
     from src.security.resolver import configure_runtime_secret
-    configure_runtime_secret(database_path, "OPENAI_API_KEY", api_key)
-    provider_key = provider_key.strip() or "openai"
+    provider_key = provider_key.strip() or "gemini"
+    configure_runtime_secret(database_path, "GEMINI_API_KEY" if provider_key == "gemini" else "OPENAI_API_KEY", api_key)
     model = model.strip() or DEFAULT_CONTENT_WRITER_SETTINGS["model"]
     endpoint = endpoint.strip() or DEFAULT_CONTENT_WRITER_SETTINGS["endpoint"]
     with closing(get_connection(database_path)) as connection:

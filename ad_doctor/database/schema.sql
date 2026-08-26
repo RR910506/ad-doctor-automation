@@ -185,20 +185,20 @@ CREATE TABLE IF NOT EXISTS email_settings (
 
 CREATE TABLE IF NOT EXISTS research_provider_settings (
     id INTEGER PRIMARY KEY CHECK (id = 1),
-    provider_key TEXT NOT NULL DEFAULT 'perplexity',
+    provider_key TEXT NOT NULL DEFAULT 'gemini',
     api_key TEXT,
-    model TEXT NOT NULL DEFAULT 'sonar-pro',
-    endpoint TEXT NOT NULL DEFAULT 'https://api.perplexity.ai/v1/sonar',
+    model TEXT NOT NULL DEFAULT 'gemini-2.5-flash',
+    endpoint TEXT NOT NULL DEFAULT 'https://generativelanguage.googleapis.com',
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS content_writer_settings (
     id INTEGER PRIMARY KEY CHECK (id = 1),
-    provider_key TEXT NOT NULL DEFAULT 'openai',
+    provider_key TEXT NOT NULL DEFAULT 'gemini',
     enabled INTEGER NOT NULL DEFAULT 1,
     api_key TEXT,
-    model TEXT NOT NULL DEFAULT 'gpt-4.1-mini',
-    endpoint TEXT NOT NULL DEFAULT 'https://api.openai.com/v1',
+    model TEXT NOT NULL DEFAULT 'gemini-2.5-flash',
+    endpoint TEXT NOT NULL DEFAULT 'https://generativelanguage.googleapis.com',
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

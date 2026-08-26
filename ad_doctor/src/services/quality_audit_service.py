@@ -1,9 +1,11 @@
 from __future__ import annotations
 import re
+from dataclasses import asdict
 from contextlib import closing
 from dataclasses import replace
 from datetime import UTC,datetime
 from pathlib import Path
+from typing import Protocol,runtime_checkable
 from uuid import uuid4
 from src.db import get_connection
 from src.domain.content_package import ClaimClassification,ContentPackage,SlideType
@@ -14,6 +16,10 @@ from src.services.case_lifecycle_service import CaseLifecycleService
 from src.services.voice_rules import find_pr_language
 DIMENSIONS=('evidence_integrity','diagnosis_depth','strategic_reasoning','doctors_opinion_strength','prescription_usefulness','carousel_narrative','tone_and_voice','pr_language_avoidance','factual_traceability','readability_and_concision','fact_inference_opinion_distinction','content_completeness')
 WEIGHTS={d:1/len(DIMENSIONS) for d in DIMENSIONS}
+@runtime_checkable
+class StrategicQualityProvider(Protocol):
+ provider_name:str;model_name:str
+ def audit(self,*,package:dict,evidence:dict,deterministic_findings:list[dict])->dict:...
 class QualityAuditService:
  def __init__(self,path:Path,strategic_provider=None):self.path=Path(path);self.strategic_provider=strategic_provider;self.repo=SQLiteQualityReviewRepository(path);self.lifecycle=CaseLifecycleService(path)
  def deterministic_findings(self,p:ContentPackage,evidence):
@@ -39,17 +45,28 @@ class QualityAuditService:
  def audit(self,p:ContentPackage,evidence,*,run_id='quality'):
   p.validate_against(evidence);findings,matches=self.deterministic_findings(p,evidence);scores={d:100.0 for d in DIMENSIONS}
   for f in findings:scores[f.dimension]=min(scores.get(f.dimension,100),30 if f.blocking else 75)
+  result={}
   if self.strategic_provider:
-   result=self.strategic_provider.audit(package=p.to_dict(),evidence=evidence.to_dict())
+   deterministic_payload=[]
+   for finding in findings:
+    item=asdict(finding);item['severity']=finding.severity.value;item['claim_ids']=list(finding.claim_ids);deterministic_payload.append(item)
+   result=self.strategic_provider.audit(package=p.to_dict(),evidence=evidence.to_dict(),deterministic_findings=deterministic_payload)
    for k,v in result.get('dimension_scores',{}).items():
-    if k in scores:scores[k]=max(0,min(100,float(v)))
+    if k in scores:scores[k]=min(scores[k],max(0,min(100,float(v))))
+   valid_claim_ids={claim.claim_id for claim in p.claims}
+   for raw in result.get('findings',[]):
+    if not isinstance(raw,dict) or raw.get('dimension') not in DIMENSIONS:continue
+    try:severity=FindingSeverity(str(raw.get('severity') or 'warning').lower())
+    except ValueError:severity=FindingSeverity.WARNING
+    claim_ids=tuple(value for value in raw.get('claim_ids',()) if value in valid_claim_ids)
+    finding=QualityFinding(f'finding_{uuid4().hex}',severity,str(raw['dimension']),str(raw.get('section') or 'package'),str(raw.get('explanation') or 'Strategic quality concern.'),str(raw.get('recommended_correction') or 'Revise with stronger evidence discipline.'),bool(raw.get('blocking',False)),int(raw['slide_number']) if raw.get('slide_number') is not None else None,claim_ids);findings.append(finding);scores[finding.dimension]=min(scores[finding.dimension],30 if finding.blocking else 75)
   overall=round(sum(scores[d]*WEIGHTS[d] for d in DIMENSIONS),2);blocking=any(f.blocking for f in findings);warnings=any(f.severity==FindingSeverity.WARNING for f in findings)
   gate=GateStatus.FAIL if blocking else GateStatus.PASS_WITH_WARNINGS if warnings else GateStatus.PASS
   with closing(get_connection(self.path)) as c:
    c.execute('BEGIN IMMEDIATE');row=c.execute('SELECT * FROM cases WHERE case_id=?',(p.case_id,)).fetchone()
    if not row:raise LookupError('Case not found')
    case=self.lifecycle.cases._from_row(row);review_version=int(c.execute('SELECT COALESCE(MAX(review_version),0)+1 FROM quality_reviews WHERE content_package_id=?',(p.content_package_id,)).fetchone()[0])
-   review=QualityReview(f'quality_{uuid4().hex}',p.case_id,p.content_package_id,p.package_version,'deterministic_plus_provider' if self.strategic_provider else 'deterministic','phase3a',review_version,datetime.now(UTC),overall,gate,scores,tuple(findings),tuple(cid for f in findings for cid in f.claim_ids),(),matches,(),tuple(f.recommended_correction for f in findings if f.blocking),'Blocked by explainable findings.' if blocking else 'Ready for human editorial review.',{})
+   review=QualityReview(f'quality_{uuid4().hex}',p.case_id,p.content_package_id,p.package_version,getattr(self.strategic_provider,'provider_name','deterministic') if self.strategic_provider else 'deterministic',getattr(self.strategic_provider,'model_name','phase3a') if self.strategic_provider else 'phase3a',review_version,datetime.now(UTC),overall,gate,scores,tuple(findings),tuple(cid for f in findings for cid in f.claim_ids),(),matches,(),tuple(f.recommended_correction for f in findings if f.blocking),str(result.get('reviewer_summary') or ('Blocked by explainable findings.' if blocking else 'Ready for human editorial review.')),{'strategic_usage':result.get('usage',{})} if self.strategic_provider else {})
    if case.workflow_status in {WorkflowStatus.CONTENT_DRAFTED.value,WorkflowStatus.QUALITY_REVIEW_FAILED.value}:case=self.lifecycle._transition(c,case,WorkflowStatus.QUALITY_REVIEW_PENDING,ActorType.SYSTEM,'quality_auditor','Quality audit started.',run_id,'quality')
    target=WorkflowStatus.QUALITY_REVIEW_FAILED if gate==GateStatus.FAIL else WorkflowStatus.EDITORIAL_REVIEW_PENDING
    case=self.lifecycle._transition(c,case,target,ActorType.SYSTEM,'quality_auditor','Quality audit completed.',run_id,'quality');case=self.lifecycle._update_case(c,replace(case,quality_status=gate.value));self.repo.create_in(c,review);c.execute('UPDATE content_packages SET gate_status=?,overall_score=? WHERE content_package_id=?',(gate.value,overall,p.content_package_id));c.commit();return review
