@@ -7,8 +7,16 @@ CREATE TABLE IF NOT EXISTS sources (
     rss_url TEXT,
     category TEXT,
     country TEXT,
+    domain TEXT,
+    publisher_network TEXT,
     credibility_tier INTEGER DEFAULT 1,
     active_status INTEGER NOT NULL DEFAULT 1,
+    crawl_frequency_minutes INTEGER NOT NULL DEFAULT 60,
+    crawl_priority INTEGER NOT NULL DEFAULT 100,
+    browser_policy TEXT NOT NULL DEFAULT 'fallback',
+    last_crawl TEXT,
+    last_success TEXT,
+    failure_count INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (website_url)
@@ -25,6 +33,9 @@ CREATE TABLE IF NOT EXISTS articles (
     author TEXT,
     meta_description TEXT,
     article_text TEXT,
+    canonical_url TEXT,
+    content_hash TEXT,
+    extraction_method TEXT,
     fetch_run_id TEXT,
     fetch_timestamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -185,9 +196,9 @@ CREATE TABLE IF NOT EXISTS email_settings (
 
 CREATE TABLE IF NOT EXISTS research_provider_settings (
     id INTEGER PRIMARY KEY CHECK (id = 1),
-    provider_key TEXT NOT NULL DEFAULT 'gemini',
+    provider_key TEXT NOT NULL DEFAULT 'browser',
     api_key TEXT,
-    model TEXT NOT NULL DEFAULT 'gemini-2.5-flash',
+    model TEXT NOT NULL DEFAULT 'approved-source-browser',
     endpoint TEXT NOT NULL DEFAULT 'https://generativelanguage.googleapis.com',
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -197,7 +208,7 @@ CREATE TABLE IF NOT EXISTS content_writer_settings (
     provider_key TEXT NOT NULL DEFAULT 'gemini',
     enabled INTEGER NOT NULL DEFAULT 1,
     api_key TEXT,
-    model TEXT NOT NULL DEFAULT 'gemini-2.5-flash',
+    model TEXT NOT NULL DEFAULT 'gemini-3.7-flash',
     endpoint TEXT NOT NULL DEFAULT 'https://generativelanguage.googleapis.com',
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -327,6 +338,32 @@ CREATE INDEX IF NOT EXISTS idx_approval_events_case_time ON approval_events(case
 CREATE INDEX IF NOT EXISTS idx_approval_events_draft ON approval_events(draft_id);
 CREATE INDEX IF NOT EXISTS idx_approval_events_reviewer ON approval_events(reviewer_id);
 CREATE INDEX IF NOT EXISTS idx_approval_events_status ON approval_events(new_status);
+
+-- Browser Research Engine: approved-domain crawl memory and bounded worker telemetry.
+CREATE TABLE IF NOT EXISTS browser_crawl_memory (
+ id INTEGER PRIMARY KEY AUTOINCREMENT, source_id INTEGER NOT NULL, url TEXT NOT NULL,
+ canonical_url TEXT NOT NULL UNIQUE, first_seen TEXT NOT NULL, last_seen TEXT NOT NULL,
+ last_fetched TEXT, content_hash TEXT, http_status INTEGER, extraction_method TEXT,
+ extraction_status TEXT NOT NULL, published_at TEXT, author TEXT, publisher_network TEXT,
+ FOREIGN KEY(source_id) REFERENCES sources(id)
+);
+CREATE INDEX IF NOT EXISTS idx_browser_crawl_source ON browser_crawl_memory(source_id,last_fetched);
+CREATE INDEX IF NOT EXISTS idx_browser_crawl_hash ON browser_crawl_memory(content_hash);
+CREATE TABLE IF NOT EXISTS browser_worker_runs (
+ id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL UNIQUE, status TEXT NOT NULL,
+ started_at TEXT NOT NULL, finished_at TEXT, sources_monitored INTEGER NOT NULL DEFAULT 0,
+ sources_checked INTEGER NOT NULL DEFAULT 0, urls_discovered INTEGER NOT NULL DEFAULT 0,
+ articles_fetched INTEGER NOT NULL DEFAULT 0, http_extractions INTEGER NOT NULL DEFAULT 0,
+ browser_fallbacks INTEGER NOT NULL DEFAULT 0, unchanged_skipped INTEGER NOT NULL DEFAULT 0,
+ extraction_failures INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS research_documents (
+ id INTEGER PRIMARY KEY AUTOINCREMENT, case_id TEXT NOT NULL, source_url TEXT NOT NULL,
+ canonical_url TEXT NOT NULL, page_title TEXT NOT NULL, publication TEXT NOT NULL,
+ publisher_network TEXT NOT NULL, retrieved_at TEXT NOT NULL, normalized_text TEXT NOT NULL,
+ content_hash TEXT NOT NULL, extraction_method TEXT NOT NULL, provenance TEXT NOT NULL,
+ UNIQUE(case_id,canonical_url,content_hash), FOREIGN KEY(case_id) REFERENCES cases(case_id) ON DELETE CASCADE
+);
 
 -- Phase 3A structured Content Packages and immutable Quality Reviews.
 CREATE TABLE IF NOT EXISTS content_packages (

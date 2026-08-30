@@ -18,8 +18,13 @@ OPTIONAL_COLUMNS = (
     "rss_url",
     "category",
     "country",
+    "domain",
+    "publisher_network",
     "credibility_tier",
     "active_status",
+    "crawl_frequency_minutes",
+    "crawl_priority",
+    "browser_policy",
 )
 SOURCE_COLUMNS = REQUIRED_COLUMNS + OPTIONAL_COLUMNS
 
@@ -28,6 +33,8 @@ COLUMN_ALIASES = {
     "source": "source_name",
     "publication": "source_name",
     "publisher": "source_name",
+    "network": "publisher_network",
+    "publisher_group": "publisher_network",
     "url": "website_url",
     "link": "website_url",
     "website": "website_url",
@@ -187,8 +194,13 @@ def normalize_sources_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
     normalized["rss_url"] = normalized["rss_url"].map(clean_optional_url)
     normalized["category"] = normalized["category"].map(clean_optional_text)
     normalized["country"] = normalized["country"].map(clean_optional_text)
+    normalized["domain"] = normalized.apply(lambda row: clean_optional_text(row["domain"]) or (urlparse(str(row["website_url"] or "")).hostname or "").lower().removeprefix("www."),axis=1)
+    normalized["publisher_network"] = normalized.apply(lambda row: clean_optional_text(row["publisher_network"]) or _default_publisher_network(row["source_name"]),axis=1)
     normalized["credibility_tier"] = normalized["credibility_tier"].map(normalize_credibility_tier)
     normalized["active_status"] = normalized["active_status"].map(normalize_active_status)
+    normalized["crawl_frequency_minutes"] = normalized["crawl_frequency_minutes"].map(lambda value: normalize_positive_int(value,60))
+    normalized["crawl_priority"] = normalized["crawl_priority"].map(lambda value: normalize_positive_int(value,100))
+    normalized["browser_policy"] = normalized["browser_policy"].map(lambda value: clean_optional_text(value) or "fallback")
 
     row_count_before = len(normalized)
     normalized = normalized[
@@ -279,3 +291,13 @@ def normalize_active_status(value: object) -> int:
     if cleaned in FALSE_VALUES:
         return 0
     return 1
+
+
+def normalize_positive_int(value: object, default: int) -> int:
+    numeric = pd.to_numeric(value, errors="coerce")
+    return default if pd.isna(numeric) else max(1, int(numeric))
+
+
+def _default_publisher_network(source_name: object) -> str:
+    name = str(source_name or "").strip()
+    return "Campaign" if name.lower().startswith("campaign ") or name.lower() == "campaign" else name

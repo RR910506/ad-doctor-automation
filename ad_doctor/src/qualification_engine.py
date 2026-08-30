@@ -7,7 +7,7 @@ import json
 
 from src.config import DATABASE_PATH
 from src.db import (
-    count_active_sources,
+    count_active_publisher_networks,
     get_connection,
     list_topics,
     log_run_event,
@@ -90,7 +90,7 @@ def qualify_topics(
     shadow_rows: list[tuple[dict[str, object], list[dict[str, object]], dict[str, object], bool]] = []
     with closing(get_connection(database_path)) as connection:
         topics = list_topics(connection, limit=None)
-        active_source_count = count_active_sources(connection)
+        active_source_count = count_active_publisher_networks(connection)
         minimum_required = minimum_required_sources(active_source_count)
         qualified = 0
         rejected = 0
@@ -157,6 +157,7 @@ def get_exact_topic_scoring_inputs(connection, topic: dict[str, object]) -> dict
         SELECT
             ts.source_id,
             s.source_name,
+            COALESCE(NULLIF(s.publisher_network,''),s.source_name) AS publisher_network,
             s.credibility_tier,
             a.id AS article_id,
             a.article_url,
@@ -181,4 +182,4 @@ def get_exact_topic_scoring_inputs(connection, topic: dict[str, object]) -> dict
 def count_unique_exact_sources(coverages: object) -> int:
     if not isinstance(coverages, list):
         return 0
-    return len({int(row["source_id"]) for row in coverages if row.get("source_id") is not None})
+    return len({str(row.get("publisher_network") or row.get("source_name") or row.get("source_id")).strip().lower() for row in coverages if row.get("publisher_network") or row.get("source_name") or row.get("source_id") is not None})

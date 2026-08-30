@@ -62,8 +62,8 @@ def response(data=None):
 
 
 class GeminiResearchTest(unittest.TestCase):
-    def provider(self, data=None):
-        models=FakeModels(response(data)); return GeminiResearchProvider(api_key="test-secret", client=SimpleNamespace(models=models)),models
+    def provider(self, data=None, *, grounding_enabled=False):
+        models=FakeModels(response(data)); return GeminiResearchProvider(api_key="test-secret", client=SimpleNamespace(models=models), grounding_enabled=grounding_enabled),models
 
     def test_provider_implements_research_interface(self):
         provider,_=self.provider(); self.assertIsInstance(provider, ResearchProvider)
@@ -82,8 +82,10 @@ class GeminiResearchTest(unittest.TestCase):
         with self.assertRaises(GeminiProviderError) as caught: provider.research(topic="t",source_articles=[],research_brief="b")
         self.assertNotIn("secret-value",str(caught.exception))
 
-    def test_search_grounding_is_enabled(self):
+    def test_search_grounding_is_optional_and_disabled_by_default(self):
         provider,models=self.provider(); provider.research(topic="t",source_articles=[],research_brief="b")
+        self.assertFalse(models.calls[0]["config"].tools)
+        provider,models=self.provider(grounding_enabled=True); provider.research(topic="t",source_articles=[],research_brief="b")
         config=models.calls[0]["config"]
         self.assertIsNotNone(config.tools[0].google_search)
         self.assertEqual(config.response_mime_type,"application/json")
@@ -169,7 +171,7 @@ class GeminiResearchTest(unittest.TestCase):
         self.assertEqual(EvidencePack.from_dict(value).research_provider,"perplexity")
 
     def test_gemini_is_default(self):
-        self.assertEqual(DEFAULT_RESEARCH_SETTINGS["provider_key"],"gemini");self.assertEqual(DEFAULT_RESEARCH_SETTINGS["model"],GEMINI_MODEL);self.assertEqual(get_research_engine_by_key("gemini")["env_var"],"GEMINI_API_KEY")
+        self.assertEqual(DEFAULT_RESEARCH_SETTINGS["provider_key"],"browser");self.assertEqual(DEFAULT_RESEARCH_SETTINGS["model"],"approved-source-browser");self.assertEqual(get_research_engine_by_key("gemini")["env_var"],"GEMINI_API_KEY")
 
     def test_perplexity_key_is_not_mandatory(self):
         self.assertTrue(EnvironmentSecretProvider({"GEMINI_API_KEY":"key"}).resolve("GEMINI_API_KEY").configured)

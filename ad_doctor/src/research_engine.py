@@ -79,7 +79,14 @@ def build_research_dossiers(
             context = get_locked_topic_context(connection, int(locked_topic["id"]))
             dossier = build_local_dossier(context)
             gemini_result = None
-            if provider_settings["key"] == "gemini":
+            if provider_settings["key"] == "browser":
+                research_payload = build_approved_source_only_research_payload(
+                    str(dossier.get("topic") or ""),
+                    list(dossier.get("source_articles") or []),
+                )
+                dossier["research_result"] = research_payload
+                dossier["research_mode"] = "browser_retrieved_evidence"
+            elif provider_settings["key"] == "gemini":
                 gemini_result = gemini_provider.research(
                     topic=str(dossier.get("topic") or ""),
                     source_articles=list(dossier.get("source_articles") or []),
@@ -93,7 +100,7 @@ def build_research_dossiers(
                     "grounding_metadata": gemini_result.grounding_metadata, "usage": gemini_result.usage,
                 }
                 dossier["research_result"] = research_payload
-                dossier["research_mode"] = "gemini_google_search_grounded"
+                dossier["research_mode"] = "gemini_evidence_reasoning_no_search"
             elif perplexity_research.ACTIVE_RESEARCH_PROVIDER == "approved_source_only":
                 research_payload = build_approved_source_only_research_payload(
                     str(dossier.get("topic") or ""),
@@ -104,7 +111,7 @@ def build_research_dossiers(
                     str(dossier.get("topic") or ""),
                     list(dossier.get("source_articles") or []),
                 )
-            if provider_settings["key"] != "gemini":
+            if provider_settings["key"] not in {"gemini", "browser"}:
                 dossier["perplexity_research"] = research_payload
             if research_payload.get("status") == "completed" and provider_settings["key"] == "perplexity":
                 dossier["research_mode"] = "perplexity_augmented"

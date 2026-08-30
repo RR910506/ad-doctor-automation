@@ -19,7 +19,7 @@ class PublishingViewModel:ready:tuple[ListItem,...];blocked:tuple[ListItem,...];
 @dataclass(frozen=True,slots=True)
 class SubscriberListItem(ListItem):pass
 @dataclass(frozen=True,slots=True)
-class AutomationViewModel:enabled:bool;next_run:str;last_run:str;timezone:str;times:tuple[str,...];history:tuple[ListItem,...]
+class AutomationViewModel:enabled:bool;next_run:str;last_run:str;timezone:str;times:tuple[str,...];history:tuple[ListItem,...];browser_metrics:dict[str,Any]=field(default_factory=dict)
 @dataclass(frozen=True,slots=True)
 class LogListItem(ListItem):pass
 @dataclass(frozen=True,slots=True)

@@ -38,11 +38,13 @@ def render(st, service, actions):
     with tabs[1]:
         st.info('The diagnosis-led editorial framework is active. Research and content generation remain separate stages.')
     with tabs[2]:
-        _provider(st, by_name['Gemini Research'], 'Replacement Gemini API key')
-        st.write('**Model:** gemini-2.5-flash')
-        st.write('**Google Search grounding:** Enabled')
+        _provider(st, by_name['Browser Research'])
+        st.write('**Retrieval:** RSS/HTTP first, Playwright Chromium fallback')
+        st.write('**Google Search grounding:** Disabled')
+        st.caption('The SQLite Sources registry is authoritative. Google Sheets is optional.')
     with tabs[3]:
         _provider(st, by_name['Gemini Content'])
+        st.write('**Primary model:** gemini-3.7-flash · **503-only fallback:** gemini-3.5-flash')
         st.write('**Grounding:** Disabled')
         _provider(st, by_name['Gemini Quality'])
         st.write('**Grounding:** Disabled')

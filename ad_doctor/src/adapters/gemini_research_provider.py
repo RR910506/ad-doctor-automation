@@ -9,7 +9,8 @@ from urllib.parse import urldefrag
 from src.security.secret_provider import MissingSecretError, valid_secret
 
 
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3.7-flash"
+GEMINI_FALLBACK_MODEL = "gemini-3.5-flash"
 
 
 @runtime_checkable
@@ -70,10 +71,12 @@ class GeminiResearchProvider:
 
     provider_name = "gemini"
 
-    def __init__(self, *, api_key: str, model: str = GEMINI_MODEL, client: object | None = None) -> None:
+    def __init__(self, *, api_key: str, model: str = GEMINI_MODEL, fallback_model: str = GEMINI_FALLBACK_MODEL, grounding_enabled: bool = False, client: object | None = None) -> None:
         if not valid_secret(api_key):
             raise MissingSecretError("GEMINI_API_KEY is not configured")
         self.model = model.strip() or GEMINI_MODEL
+        self.fallback_model = fallback_model.strip() or GEMINI_FALLBACK_MODEL
+        self.grounding_enabled = bool(grounding_enabled)
         if client is None:
             try:
                 from google import genai
@@ -85,12 +88,19 @@ class GeminiResearchProvider:
     def research(self, *, topic: str, source_articles: list[dict[str, object]], research_brief: str) -> NormalizedResearchResult:
         prompt = _build_prompt(topic, source_articles, research_brief)
         try:
-            response = self._client.models.generate_content(
-                model=self.model,
+            from src.services.gemini_model_policy import generate_with_availability_fallback
+            call = generate_with_availability_fallback(
+                self._client,
+                primary_model=self.model,
+                fallback_model=self.fallback_model,
                 contents=prompt,
-                config=_grounded_config(structured_json=True),
+                config=_research_config(grounding_enabled=self.grounding_enabled, structured_json=True),
             )
+            response = call.response
+            used_model = call.model
         except Exception as exc:
+            if isinstance(exc, GeminiProviderError):
+                raise
             raise GeminiProviderError(classify_gemini_error(exc)) from None
         text = str(getattr(response, "text", "") or "").strip()
         structured = _parse_json(text)
@@ -99,7 +109,7 @@ class GeminiResearchProvider:
         usage = _usage(getattr(response, "usage_metadata", None))
         return NormalizedResearchResult(
             provider=self.provider_name,
-            model=self.model,
+            model=used_model,
             final_text=text,
             structured=structured,
             grounded_sources=sources,
@@ -168,27 +178,31 @@ def classify_gemini_error(exc: BaseException) -> SafeGeminiError:
     )
 
 
-def _grounded_config(*, structured_json: bool) -> object:
+def _research_config(*, grounding_enabled: bool, structured_json: bool) -> object:
     from google.genai import types
 
-    values: dict[str, object] = {
-        "tools": [types.Tool(google_search=types.GoogleSearch())],
-    }
+    values: dict[str, object] = {}
+    if grounding_enabled:
+        values["tools"] = [types.Tool(google_search=types.GoogleSearch())]
     if structured_json:
         values.update(response_mime_type="application/json", temperature=0.1)
     return types.GenerateContentConfig(**values)
 
 
+def _grounded_config(*, structured_json: bool) -> object:
+    return _research_config(grounding_enabled=True, structured_json=structured_json)
+
+
 def _build_prompt(topic: str, source_articles: list[dict[str, object]], research_brief: str) -> str:
     seeds = [{"publication": item.get("source_name"), "title": item.get("headline"), "url": item.get("article_url")} for item in source_articles]
     return f"""You are the research stage for Ad Doctor, a marketing intelligence and opinion platform.
-Use Google Search extensively. Do not rely on ungrounded model knowledge for recent claims.
+Use only the retrieved source documents supplied below. Google Search and external browsing are forbidden.
 Research topic: {topic}
 
 Research direction:
 {research_brief}
 
-Qualifying coverage seeds (not sufficient as the whole investigation):
+Retrieved source documents:
 {json.dumps(seeds, ensure_ascii=False)}
 
 Return one JSON object only with these fields:

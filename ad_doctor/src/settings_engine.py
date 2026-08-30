@@ -11,11 +11,20 @@ from src.db import get_connection
 
 RESEARCH_ENGINE_OPTIONS: tuple[dict[str, str], ...] = (
     {
+        "key": "browser",
+        "label": "Browser Research Engine",
+        "status": "HTTP-first approved-source research",
+        "api_key_label": "No research API key needed",
+        "model": "approved-source-browser",
+        "endpoint": "",
+        "env_var": "",
+    },
+    {
         "key": "gemini",
-        "label": "Gemini Research",
-        "status": "Live grounded research",
+        "label": "Gemini Evidence Reasoning (optional)",
+        "status": "Ungrounded reasoning over retrieved evidence",
         "api_key_label": "Gemini API key",
-        "model": "gemini-2.5-flash",
+        "model": "gemini-3.7-flash",
         "endpoint": "https://generativelanguage.googleapis.com",
         "env_var": "GEMINI_API_KEY",
     },
@@ -122,16 +131,16 @@ RESEARCH_ENGINE_OPTIONS: tuple[dict[str, str], ...] = (
 
 
 DEFAULT_RESEARCH_SETTINGS = {
-    "provider_key": "gemini",
-    "model": "gemini-2.5-flash",
-    "endpoint": "https://generativelanguage.googleapis.com",
+    "provider_key": "browser",
+    "model": "approved-source-browser",
+    "endpoint": "",
     "api_key": "",
 }
 
 DEFAULT_CONTENT_WRITER_SETTINGS = {
     "provider_key": "gemini",
     "enabled": "1",
-    "model": "gemini-2.5-flash",
+    "model": "gemini-3.7-flash",
     "endpoint": "https://generativelanguage.googleapis.com",
     "api_key": "",
 }
@@ -145,7 +154,7 @@ DEFAULT_CONTENT_FRAMEWORK = {
         "and what marketers should learn."
     ),
     "qualification_rule": (
-        "Create content only when the topic is covered by at least 3 unique credible approved-source websites. "
+        "Create content only when the topic is covered by at least 3 independent approved publisher networks. "
         "If coverage is below 3, reject the topic and do not create a publishable draft."
     ),
     "content_pillars": json.dumps(

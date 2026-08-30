@@ -69,15 +69,36 @@ def retry_locked_database(operation, attempts: int = 5, delay_seconds: float = 0
 
 
 def run_migrations(connection: sqlite3.Connection) -> None:
+    source_columns = {row["name"] for row in connection.execute("PRAGMA table_info(sources)").fetchall()}
+    source_additions = {
+        "domain": "TEXT", "publisher_network": "TEXT", "crawl_frequency_minutes": "INTEGER NOT NULL DEFAULT 60",
+        "crawl_priority": "INTEGER NOT NULL DEFAULT 100", "browser_policy": "TEXT NOT NULL DEFAULT 'fallback'",
+        "last_crawl": "TEXT", "last_success": "TEXT", "failure_count": "INTEGER NOT NULL DEFAULT 0",
+    }
+    for column, definition in source_additions.items():
+        if column not in source_columns:
+            connection.execute(f"ALTER TABLE sources ADD COLUMN {column} {definition}")
     article_columns = {
         row["name"]
         for row in connection.execute("PRAGMA table_info(articles)").fetchall()
     }
     if "fetch_run_id" not in article_columns:
         connection.execute("ALTER TABLE articles ADD COLUMN fetch_run_id TEXT")
+    for column, definition in {"canonical_url": "TEXT", "content_hash": "TEXT", "extraction_method": "TEXT"}.items():
+        if column not in article_columns:
+            connection.execute(f"ALTER TABLE articles ADD COLUMN {column} {definition}")
+    connection.executescript("""
+        CREATE TABLE IF NOT EXISTS browser_crawl_memory(id INTEGER PRIMARY KEY AUTOINCREMENT,source_id INTEGER NOT NULL,url TEXT NOT NULL,canonical_url TEXT NOT NULL UNIQUE,first_seen TEXT NOT NULL,last_seen TEXT NOT NULL,last_fetched TEXT,content_hash TEXT,http_status INTEGER,extraction_method TEXT,extraction_status TEXT NOT NULL,published_at TEXT,author TEXT,publisher_network TEXT,FOREIGN KEY(source_id) REFERENCES sources(id));
+        CREATE INDEX IF NOT EXISTS idx_browser_crawl_source ON browser_crawl_memory(source_id,last_fetched);
+        CREATE INDEX IF NOT EXISTS idx_browser_crawl_hash ON browser_crawl_memory(content_hash);
+        CREATE TABLE IF NOT EXISTS browser_worker_runs(id INTEGER PRIMARY KEY AUTOINCREMENT,run_id TEXT NOT NULL UNIQUE,status TEXT NOT NULL,started_at TEXT NOT NULL,finished_at TEXT,sources_monitored INTEGER NOT NULL DEFAULT 0,sources_checked INTEGER NOT NULL DEFAULT 0,urls_discovered INTEGER NOT NULL DEFAULT 0,articles_fetched INTEGER NOT NULL DEFAULT 0,http_extractions INTEGER NOT NULL DEFAULT 0,browser_fallbacks INTEGER NOT NULL DEFAULT 0,unchanged_skipped INTEGER NOT NULL DEFAULT 0,extraction_failures INTEGER NOT NULL DEFAULT 0);
+        CREATE TABLE IF NOT EXISTS research_documents(id INTEGER PRIMARY KEY AUTOINCREMENT,case_id TEXT NOT NULL,source_url TEXT NOT NULL,canonical_url TEXT NOT NULL,page_title TEXT NOT NULL,publication TEXT NOT NULL,publisher_network TEXT NOT NULL,retrieved_at TEXT NOT NULL,normalized_text TEXT NOT NULL,content_hash TEXT NOT NULL,extraction_method TEXT NOT NULL,provenance TEXT NOT NULL,UNIQUE(case_id,canonical_url,content_hash),FOREIGN KEY(case_id) REFERENCES cases(case_id) ON DELETE CASCADE);
+    """)
     connection.execute(
         "CREATE INDEX IF NOT EXISTS idx_articles_fetch_run_id ON articles (fetch_run_id)"
     )
+    connection.execute("UPDATE research_provider_settings SET provider_key='browser',model='approved-source-browser',endpoint='',updated_at=CURRENT_TIMESTAMP WHERE provider_key='gemini' AND model='gemini-2.5-flash'")
+    connection.execute("UPDATE content_writer_settings SET model='gemini-3.7-flash',updated_at=CURRENT_TIMESTAMP WHERE provider_key='gemini' AND model='gemini-2.5-flash'")
     connection.execute(
         """
         CREATE TABLE IF NOT EXISTS automation_settings (
@@ -152,9 +173,9 @@ def run_migrations(connection: sqlite3.Connection) -> None:
         """
         CREATE TABLE IF NOT EXISTS research_provider_settings (
             id INTEGER PRIMARY KEY CHECK (id = 1),
-            provider_key TEXT NOT NULL DEFAULT 'gemini',
+            provider_key TEXT NOT NULL DEFAULT 'browser',
             api_key TEXT,
-            model TEXT NOT NULL DEFAULT 'gemini-2.5-flash',
+            model TEXT NOT NULL DEFAULT 'approved-source-browser',
             endpoint TEXT NOT NULL DEFAULT 'https://generativelanguage.googleapis.com',
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
@@ -167,7 +188,7 @@ def run_migrations(connection: sqlite3.Connection) -> None:
             provider_key TEXT NOT NULL DEFAULT 'gemini',
             enabled INTEGER NOT NULL DEFAULT 1,
             api_key TEXT,
-            model TEXT NOT NULL DEFAULT 'gemini-2.5-flash',
+            model TEXT NOT NULL DEFAULT 'gemini-3.7-flash',
             endpoint TEXT NOT NULL DEFAULT 'https://generativelanguage.googleapis.com',
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
@@ -400,17 +421,27 @@ def upsert_source(connection: sqlite3.Connection, source: dict[str, Any]) -> str
             rss_url,
             category,
             country,
+            domain,
+            publisher_network,
             credibility_tier,
-            active_status
+            active_status,
+            crawl_frequency_minutes,
+            crawl_priority,
+            browser_policy
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(website_url) DO UPDATE SET
             source_name = excluded.source_name,
             rss_url = excluded.rss_url,
             category = excluded.category,
             country = excluded.country,
+            domain = excluded.domain,
+            publisher_network = excluded.publisher_network,
             credibility_tier = excluded.credibility_tier,
             active_status = excluded.active_status,
+            crawl_frequency_minutes = excluded.crawl_frequency_minutes,
+            crawl_priority = excluded.crawl_priority,
+            browser_policy = excluded.browser_policy,
             updated_at = CURRENT_TIMESTAMP
         """,
         (
@@ -419,8 +450,13 @@ def upsert_source(connection: sqlite3.Connection, source: dict[str, Any]) -> str
             source.get("rss_url"),
             source.get("category"),
             source.get("country"),
+            source.get("domain"),
+            source.get("publisher_network") or ("Campaign" if str(source["source_name"]).strip().lower().startswith("campaign ") else source["source_name"]),
             source.get("credibility_tier", 1),
             source.get("active_status", 1),
+            source.get("crawl_frequency_minutes", 60),
+            source.get("crawl_priority", 100),
+            source.get("browser_policy", "fallback"),
         ),
     )
     return "updated" if existing else "inserted"
@@ -447,8 +483,16 @@ def list_sources(connection: sqlite3.Connection) -> list[dict[str, Any]]:
             rss_url,
             category,
             country,
+            domain,
+            publisher_network,
             credibility_tier,
             active_status,
+            crawl_frequency_minutes,
+            crawl_priority,
+            browser_policy,
+            last_crawl,
+            last_success,
+            failure_count,
             created_at,
             updated_at
         FROM sources
@@ -465,6 +509,13 @@ def count_active_sources(connection: sqlite3.Connection) -> int:
     return int(row["total"])
 
 
+def count_active_publisher_networks(connection: sqlite3.Connection) -> int:
+    row = connection.execute(
+        "SELECT COUNT(DISTINCT lower(COALESCE(NULLIF(publisher_network,''),source_name))) AS total FROM sources WHERE active_status=1"
+    ).fetchone()
+    return int(row["total"])
+
+
 def list_active_sources(connection: sqlite3.Connection) -> list[dict[str, Any]]:
     rows = connection.execute(
         """
@@ -475,11 +526,19 @@ def list_active_sources(connection: sqlite3.Connection) -> list[dict[str, Any]]:
             rss_url,
             category,
             country,
+            domain,
+            publisher_network,
             credibility_tier,
-            active_status
+            active_status,
+            crawl_frequency_minutes,
+            crawl_priority,
+            browser_policy,
+            last_crawl,
+            last_success,
+            failure_count
         FROM sources
         WHERE active_status = 1
-        ORDER BY credibility_tier DESC, source_name ASC
+        ORDER BY crawl_priority ASC, credibility_tier DESC, source_name ASC
         """
     ).fetchall()
     return [dict(row) for row in rows]
@@ -503,9 +562,12 @@ def upsert_article(connection: sqlite3.Connection, article: dict[str, Any]) -> s
             meta_description,
             article_text,
             fetch_run_id,
+            canonical_url,
+            content_hash,
+            extraction_method,
             fetch_timestamp
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(article_url) DO UPDATE SET
             source_id = excluded.source_id,
             source_name = excluded.source_name,
@@ -516,6 +578,9 @@ def upsert_article(connection: sqlite3.Connection, article: dict[str, Any]) -> s
             meta_description = excluded.meta_description,
             article_text = excluded.article_text,
             fetch_run_id = excluded.fetch_run_id,
+            canonical_url = excluded.canonical_url,
+            content_hash = excluded.content_hash,
+            extraction_method = excluded.extraction_method,
             fetch_timestamp = CURRENT_TIMESTAMP
         """,
         (
@@ -529,6 +594,9 @@ def upsert_article(connection: sqlite3.Connection, article: dict[str, Any]) -> s
             article.get("meta_description"),
             article.get("article_text"),
             article.get("fetch_run_id"),
+            article.get("canonical_url") or article.get("article_url"),
+            article.get("content_hash"),
+            article.get("extraction_method") or "http",
         ),
     )
     return "updated" if existing else "inserted"
@@ -789,10 +857,11 @@ def list_topics(connection: sqlite3.Connection, limit: int | None = 200) -> list
             t.representative_headline,
             t.status,
             t.created_at,
-            COUNT(DISTINCT ts.source_id) AS source_coverage_count,
+            COUNT(DISTINCT lower(COALESCE(NULLIF(s.publisher_network,''),s.source_name))) AS source_coverage_count,
             COUNT(DISTINCT ts.article_id) AS article_count
         FROM topics t
         LEFT JOIN topic_sources ts ON ts.topic_id = t.id
+        LEFT JOIN sources s ON s.id = ts.source_id
         GROUP BY t.id
         ORDER BY source_coverage_count DESC, article_count DESC, t.created_at DESC
         {limit_clause}

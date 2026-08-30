@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from src.adapters.gemini_research_provider import GEMINI_MODEL
+from src.adapters.gemini_research_provider import GEMINI_FALLBACK_MODEL, GEMINI_MODEL
 from src.domain.errors import DomainValidationError
 from src.security.secret_provider import MissingSecretError, valid_secret
 
@@ -12,10 +12,12 @@ class GeminiStrategicQualityProvider:
 
     provider_name = "gemini"
 
-    def __init__(self, *, api_key: str, model: str = GEMINI_MODEL, client: object | None = None) -> None:
+    def __init__(self, *, api_key: str, model: str = GEMINI_MODEL, fallback_model: str = GEMINI_FALLBACK_MODEL, client: object | None = None) -> None:
         if not valid_secret(api_key):
             raise MissingSecretError("GEMINI_API_KEY is not configured")
-        self.model_name = model.strip() or GEMINI_MODEL
+        self.primary_model = model.strip() or GEMINI_MODEL
+        self.model_name = self.primary_model
+        self.fallback_model = fallback_model.strip() or GEMINI_FALLBACK_MODEL
         if client is None:
             try:
                 from google import genai
@@ -36,14 +38,16 @@ optional slide_number, and claim_ids. Only identify claim IDs present in the pac
 
 INPUT JSON:
 {json.dumps({'validated_evidence_pack': evidence, 'content_package': package, 'deterministic_findings': deterministic_findings}, ensure_ascii=False, default=str)}"""
-        try:
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-                config={"response_mime_type": "application/json", "temperature": 0.1},
-            )
-        except Exception as exc:
-            raise RuntimeError(f"Gemini strategic quality audit failed ({type(exc).__name__})") from None
+        from src.services.gemini_model_policy import generate_with_availability_fallback
+        call = generate_with_availability_fallback(
+            self.client,
+            primary_model=self.primary_model,
+            fallback_model=self.fallback_model,
+            contents=prompt,
+            config={"response_mime_type": "application/json", "temperature": 0.1},
+        )
+        response = call.response
+        self.model_name = call.model
         try:
             result = json.loads(str(getattr(response, "text", "") or ""))
         except (ValueError, TypeError) as exc:

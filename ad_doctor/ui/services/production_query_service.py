@@ -132,8 +132,9 @@ class ProductionUIDataSource:
         candidate = r.scalar("SELECT COUNT(*) FROM topics WHERE lower(status) NOT IN ('qualified','rejected')")
         case_count = r.scalar("SELECT COUNT(*) FROM cases") if self.capabilities.case_files_available else 0
         cases_activated = case_count > 0
-        qualified = r.scalar("SELECT COUNT(*) FROM cases WHERE lower(qualification_status)='qualified' AND unique_publication_count>=3") if cases_activated else (r.scalar("SELECT COUNT(*) FROM topics t WHERE lower(t.status)='qualified' AND (SELECT COUNT(DISTINCT ts.source_id) FROM topic_sources ts JOIN sources s ON s.id=ts.source_id AND s.active_status=1 WHERE ts.topic_id=t.id)>=3") if r.has_table("topic_sources") else 0)
-        awaiting = r.scalar("SELECT COUNT(*) FROM topics t WHERE lower(t.status)!='rejected' AND (SELECT COUNT(DISTINCT ts.source_id) FROM topic_sources ts JOIN sources s ON s.id=ts.source_id AND s.active_status=1 WHERE ts.topic_id=t.id)=2") if r.has_table("topic_sources") else 0
+        network="COALESCE(NULLIF(s.publisher_network,''),s.source_name)" if "publisher_network" in r.columns("sources") else "s.source_name"
+        qualified = r.scalar("SELECT COUNT(*) FROM cases WHERE lower(qualification_status)='qualified' AND unique_publication_count>=3") if cases_activated else (r.scalar(f"SELECT COUNT(*) FROM topics t WHERE lower(t.status)='qualified' AND (SELECT COUNT(DISTINCT lower({network})) FROM topic_sources ts JOIN sources s ON s.id=ts.source_id AND s.active_status=1 WHERE ts.topic_id=t.id)>=3") if r.has_table("topic_sources") else 0)
+        awaiting = r.scalar(f"SELECT COUNT(*) FROM topics t WHERE lower(t.status)!='rejected' AND (SELECT COUNT(DISTINCT lower({network})) FROM topic_sources ts JOIN sources s ON s.id=ts.source_id AND s.active_status=1 WHERE ts.topic_id=t.id)=2") if r.has_table("topic_sources") else 0
         research = r.scalar("SELECT COUNT(*) FROM research_dossiers") if r.has_table("research_dossiers") else None
         drafts = r.scalar("SELECT COUNT(*) FROM content_outputs") if r.has_table("content_outputs") else None
         pending = r.scalar("SELECT COUNT(*) FROM cases WHERE lower(COALESCE(approval_status,'pending'))='pending'") if cases_activated else (r.scalar("SELECT COUNT(*) FROM content_outputs WHERE lower(COALESCE(approval_status,'pending'))='pending'") if r.has_table("content_outputs") else None)
@@ -176,19 +177,24 @@ class ProductionUIDataSource:
     def list_sources(self, *, search="", status="All", sort="Newest first", page_number=1, page_size=10, filters=None):
         if not self.repository.has_table("sources"):
             return [], {"page": 1, "page_size": page_size, "total": 0, "pages": 1}
-        where, params = ["1=1"], []
+        columns=self.repository.columns("sources");where, params = ["1=1"], []
+        network_select="s.publisher_network" if "publisher_network" in columns else "s.source_name AS publisher_network"
+        browser_select="s.browser_policy" if "browser_policy" in columns else "'fallback' AS browser_policy"
+        priority_select="s.crawl_priority" if "crawl_priority" in columns else "100 AS crawl_priority"
+        failure_select="s.failure_count" if "failure_count" in columns else "0 AS failure_count"
         if search.strip():
-            where.append("(s.source_name LIKE ? OR s.website_url LIKE ? OR COALESCE(s.rss_url,'') LIKE ?)")
-            term = f"%{search.strip()}%"; params.extend((term, term, term))
+            network_search=" OR COALESCE(s.publisher_network,'') LIKE ?" if "publisher_network" in columns else ""
+            where.append(f"(s.source_name LIKE ? OR s.website_url LIKE ? OR COALESCE(s.rss_url,'') LIKE ?{network_search})")
+            term = f"%{search.strip()}%"; params.extend((term, term, term));params.extend((term,) if network_search else ())
         if status != "All":
             if status.lower() in {"active", "healthy"}: where.append("s.active_status=1")
             elif status.lower() in {"inactive", "needs attention"}: where.append("s.active_status=0")
         order = "s.source_name COLLATE NOCASE" if sort == "A–Z" else "s.created_at ASC" if sort == "Oldest first" else "s.updated_at DESC, s.id DESC"
         clause = " AND ".join(where)
-        select = f"""SELECT s.id,s.source_name,s.website_url,s.rss_url,s.category,s.country,s.credibility_tier,s.active_status,s.created_at,s.updated_at,COUNT(a.id) article_count,MAX(a.fetch_timestamp) last_scan FROM sources s LEFT JOIN articles a ON a.source_id=s.id WHERE {clause} GROUP BY s.id ORDER BY {order}"""
+        select = f"""SELECT s.id,s.source_name,s.website_url,s.rss_url,s.category,s.country,{network_select},s.credibility_tier,s.active_status,{browser_select},{priority_select},{failure_select},s.created_at,s.updated_at,COUNT(a.id) article_count,MAX(a.fetch_timestamp) last_scan FROM sources s LEFT JOIN articles a ON a.source_id=s.id WHERE {clause} GROUP BY s.id ORDER BY {order}"""
         count = f"SELECT COUNT(*) FROM sources s WHERE {clause}"
         rows, meta = self.repository.page(select, count, params, page_number=page_number, page_size=page_size)
-        return [SourceListItem(_text(row["source_name"]), _text(row["website_url"]), "active" if row["active_status"] else "inactive", "Healthy" if row["active_status"] else "Inactive", {"id": row["id"], "website": row["website_url"], "rss_url": row["rss_url"], "category": row["category"] or "Not set", "country": row["country"] or "Not set", "credibility_tier": row["credibility_tier"], "created_at": row["created_at"], "updated_at": row["updated_at"], "last_scan": row["last_scan"] or "No scan recorded", "articles": int(row["article_count"] or 0), "active": bool(row["active_status"])}) for row in rows], meta
+        return [SourceListItem(_text(row["source_name"]), _text(row["website_url"]), "active" if row["active_status"] else "inactive", "Healthy" if row["active_status"] and not row["failure_count"] else "Needs attention", {"id": row["id"], "website": row["website_url"], "rss_url": row["rss_url"], "publisher_network": row["publisher_network"] or row["source_name"], "category": row["category"] or "Not set", "country": row["country"] or "Not set", "credibility_tier": row["credibility_tier"], "browser_policy": row["browser_policy"], "crawl_priority": row["crawl_priority"], "failure_count": row["failure_count"], "created_at": row["created_at"], "updated_at": row["updated_at"], "last_scan": row["last_scan"] or "No scan recorded", "articles": int(row["article_count"] or 0), "active": bool(row["active_status"])}) for row in rows], meta
 
     def sources(self):
         return self.list_sources(page_size=100)[0]
@@ -234,7 +240,8 @@ class ProductionUIDataSource:
         if search.strip():where.append("(t.exact_topic LIKE ? OR COALESCE(t.representative_headline,'') LIKE ?)");term=f"%{search.strip()}%";params.extend((term,term))
         clause=" AND ".join(where)
         order="q.exact_topic COLLATE NOCASE" if sort=="A–Z" else "q.topic_created_at ASC" if sort=="Oldest first" else "q.topic_created_at DESC,q.id DESC"
-        grouped=f"""SELECT t.id,t.exact_topic,t.representative_headline,t.status,t.created_at topic_created_at,COUNT(DISTINCT CASE WHEN s.active_status=1 THEN s.id END) publication_count,MAX(ts.created_at) last_updated FROM topics t LEFT JOIN topic_sources ts ON ts.topic_id=t.id LEFT JOIN sources s ON s.id=ts.source_id WHERE {clause} GROUP BY t.id"""
+        network="COALESCE(NULLIF(s.publisher_network,''),s.source_name)" if "publisher_network" in self.repository.columns("sources") else "s.source_name"
+        grouped=f"""SELECT t.id,t.exact_topic,t.representative_headline,t.status,t.created_at topic_created_at,COUNT(DISTINCT CASE WHEN s.active_status=1 THEN lower({network}) END) publication_count,MAX(ts.created_at) last_updated FROM topics t LEFT JOIN topic_sources ts ON ts.topic_id=t.id LEFT JOIN sources s ON s.id=ts.source_id WHERE {clause} GROUP BY t.id"""
         status_filter=""
         if status!="All":
             wanted=status.lower()
@@ -270,7 +277,8 @@ class ProductionUIDataSource:
             rows=self.repository.rows("SELECT case_id,topic_id,canonical_topic,brand,campaign,content_type,workflow_status,qualification_status,unique_publication_count,qualification_reason,rejection_reason,priority_score,quality_status,approval_status,publication_status,updated_at,draft_id FROM cases ORDER BY updated_at DESC")
             return tuple(CaseListItem(_text(row["canonical_topic"])," · ".join(x for x in (_text(row["brand"],""),_text(row["content_type"],"")) if x),_text(row["workflow_status"]),_text(row["quality_status"]),{"case_id":row["case_id"],"topic_id":row["topic_id"],"brand":row["brand"],"content_type":row["content_type"],"sources":int(row["unique_publication_count"] or 0),"approval":row["approval_status"],"publication":row["publication_status"],"quality":row["quality_status"],"last_update":row["updated_at"],"draft_id":row["draft_id"],"data_source":"case"}) for row in rows)
         if not {"topics","locked_topics"}.issubset(self.repository.tables):return ()
-        rows=self.repository.rows("""SELECT t.id topic_id,t.exact_topic,MAX(lt.id) locked_topic_id,MAX(lt.locked_at) updated_at,(SELECT COUNT(DISTINCT ts.source_id) FROM topic_sources ts JOIN sources s ON s.id=ts.source_id AND s.active_status=1 WHERE ts.topic_id=t.id) source_count,(SELECT co.id FROM content_outputs co JOIN locked_topics l2 ON l2.id=co.locked_topic_id WHERE l2.topic_id=t.id ORDER BY co.updated_at DESC,co.id DESC LIMIT 1) draft_id,(SELECT co.approval_status FROM content_outputs co JOIN locked_topics l2 ON l2.id=co.locked_topic_id WHERE l2.topic_id=t.id ORDER BY co.updated_at DESC,co.id DESC LIMIT 1) approval_status FROM topics t JOIN locked_topics lt ON lt.topic_id=t.id WHERE lower(t.status)='qualified' GROUP BY t.id ORDER BY updated_at DESC""")
+        network="COALESCE(NULLIF(s.publisher_network,''),s.source_name)" if "publisher_network" in self.repository.columns("sources") else "s.source_name"
+        rows=self.repository.rows(f"""SELECT t.id topic_id,t.exact_topic,MAX(lt.id) locked_topic_id,MAX(lt.locked_at) updated_at,(SELECT COUNT(DISTINCT lower({network})) FROM topic_sources ts JOIN sources s ON s.id=ts.source_id AND s.active_status=1 WHERE ts.topic_id=t.id) source_count,(SELECT co.id FROM content_outputs co JOIN locked_topics l2 ON l2.id=co.locked_topic_id WHERE l2.topic_id=t.id ORDER BY co.updated_at DESC,co.id DESC LIMIT 1) draft_id,(SELECT co.approval_status FROM content_outputs co JOIN locked_topics l2 ON l2.id=co.locked_topic_id WHERE l2.topic_id=t.id ORDER BY co.updated_at DESC,co.id DESC LIMIT 1) approval_status FROM topics t JOIN locked_topics lt ON lt.topic_id=t.id WHERE lower(t.status)='qualified' GROUP BY t.id ORDER BY updated_at DESC""")
         return tuple(CaseListItem(_text(row["exact_topic"]),f"{int(row['source_count'] or 0)} distinct approved publications",_approval_status(row["approval_status"]),_text(row["approval_status"],"Research available"),{"case_id":f"legacy-topic-{row['topic_id']}","topic_id":row["topic_id"],"brand":"","content_type":"Legacy editorial draft","sources":int(row["source_count"] or 0),"approval":row["approval_status"] or "pending","publication":"Not activated","quality":"Not generated","last_update":row["updated_at"],"draft_id":row["draft_id"],"locked_topic_id":row["locked_topic_id"],"data_source":"legacy_projection"}) for row in rows)
 
     def content_studio(self):
@@ -388,7 +396,17 @@ class ProductionUIDataSource:
             rows=self.repository.rows("SELECT run_id,status,current_phase,current_source,articles_scanned,qualified_topics,error_message,started_at,finished_at FROM automation_run_history ORDER BY id DESC LIMIT 25")
             for item in rows:history.append(ListItem(_text(item.get("run_id"),"Scheduled run"),f"{_text(item.get('current_phase'),'No phase')} · {_text(item.get('current_source'),'No active source')}",str(item.get("status") or "unknown"),_text(item.get("finished_at") or item.get("started_at"),"No timestamp"),{"articles":item.get("articles_scanned"),"qualified":item.get("qualified_topics"),"error":_text(redact(item.get("error_message")),"") if item.get("error_message") else ""}))
         last=next((item.meta for item in history if item.status=="complete"),"No completed run")
-        return AutomationViewModel(bool(row["enabled"]),self._next_run(times,timezone) if row["enabled"] else "Paused",last,timezone,times,tuple(history))
+        browser_metrics={}
+        if self.repository.has_table("browser_worker_runs"):
+            browser_metrics=self.repository.row("SELECT status,started_at,finished_at,sources_monitored,sources_checked,urls_discovered,articles_fetched,http_extractions,browser_fallbacks,extraction_failures FROM browser_worker_runs ORDER BY id DESC LIMIT 1") or {}
+        if self.repository.has_table("sources"):
+            browser_metrics["active_sources"]=self.repository.scalar("SELECT COUNT(*) FROM sources WHERE active_status=1",default=0)
+            browser_metrics["sources_checked_today"]=self.repository.scalar("SELECT COUNT(*) FROM sources WHERE date(last_crawl)=date('now')",default=0) if "last_crawl" in self.repository.columns("sources") else 0
+        if self.repository.has_table("topics"):
+            browser_metrics["new_topics"]=self.repository.scalar("SELECT COUNT(*) FROM topics WHERE date(created_at)=date('now')",default=0)
+        if self.repository.has_table("cases"):
+            browser_metrics["qualified_cases"]=self.repository.scalar("SELECT COUNT(*) FROM cases WHERE qualification_status='qualified'",default=0)
+        return AutomationViewModel(bool(row["enabled"]),self._next_run(times,timezone) if row["enabled"] else "Paused",last,timezone,times,tuple(history),browser_metrics)
 
     @staticmethod
     def _next_run(times,timezone):
@@ -430,8 +448,8 @@ class ProductionUIDataSource:
         google_configured=bool(os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
         gemini=build_secret_provider(self.repository.database_path).resolve("GEMINI_API_KEY")
         gemini_status="connected" if gemini.configured else "not_configured";gemini_label='Configured' if gemini.configured else 'Not configured'
-        items=(ProviderHealthViewModel("Gemini Research",gemini_status,f"Research provider: Gemini · Model: gemini-2.5-flash · Google Search grounding: Enabled · Gemini API: {gemini_label}",gemini.source),ProviderHealthViewModel("Gemini Content",gemini_status,f"Content provider: Gemini · Model: gemini-2.5-flash · Grounding: Disabled · Gemini API: {gemini_label}",gemini.source),ProviderHealthViewModel("Gemini Quality",gemini_status,f"Quality AI provider: Gemini · Model: gemini-2.5-flash · Grounding: Disabled · Gemini API: {gemini_label}",gemini.source),ProviderHealthViewModel("Perplexity","alternative", "Historical compatibility only; not required for production research.","Advanced"),ProviderHealthViewModel("OpenAI (optional)","alternative","Optional historical provider; not required for production.","Advanced"),ProviderHealthViewModel("Google Workspace","connected" if google_configured else "not_configured","Google Workspace is configured." if google_configured else "Google Workspace is not configured.","Environment status"),ProviderHealthViewModel("Email","connected" if email_configured else "not_configured","Email delivery is configured." if email_configured else "Email delivery is not configured.","Central settings"))
+        items=(ProviderHealthViewModel("Browser Research","connected","Approved-source HTTP retrieval with headless Chromium fallback. Google Sheets is optional.","SQLite Sources"),ProviderHealthViewModel("Gemini Content",gemini_status,f"Content provider: Gemini · Primary: gemini-3.7-flash · 503 fallback: gemini-3.5-flash · Search disabled · Gemini API: {gemini_label}",gemini.source),ProviderHealthViewModel("Gemini Quality",gemini_status,f"Quality AI provider: Gemini · Primary: gemini-3.7-flash · 503 fallback: gemini-3.5-flash · Search disabled · Gemini API: {gemini_label}",gemini.source),ProviderHealthViewModel("Perplexity","alternative", "Historical compatibility only; not required for production research.","Advanced"),ProviderHealthViewModel("OpenAI (optional)","alternative","Optional historical provider; not required for production.","Advanced"),ProviderHealthViewModel("Google Workspace","connected" if google_configured else "not_configured","Google Workspace is configured." if google_configured else "Google Workspace is optional and not required for crawling.","Environment status"),ProviderHealthViewModel("Email","connected" if email_configured else "not_configured","Email delivery is configured." if email_configured else "Email delivery is not configured.","Central settings"))
         return items
 
     def _provider_status(self,kind):
-        items={item.name:item.status for item in self.settings()};name={"research":"Gemini Research","content":"Gemini Content","quality":"Gemini Quality"}.get(kind,"Gemini Content");return "Connected" if items[name]=="connected" else "Not configured"
+        items={item.name:item.status for item in self.settings()};name={"research":"Browser Research","content":"Gemini Content","quality":"Gemini Quality"}.get(kind,"Gemini Content");return "Connected" if items[name]=="connected" else "Not configured"
