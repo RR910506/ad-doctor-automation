@@ -79,7 +79,9 @@ class DynamicModels:
     def generate_content(self, **kwargs):
         self.calls.append(kwargs);prompt=str(kwargs["contents"])
         usage=SimpleNamespace(prompt_token_count=10,candidates_token_count=20,total_token_count=30)
-        if kwargs["config"].get("tools"):
+        config=kwargs["config"]
+        tools=config.get("tools") if isinstance(config,dict) else config.tools
+        if tools:
             metadata=SimpleNamespace(grounding_chunks=[SimpleNamespace(web=SimpleNamespace(uri=URL,title="WPP Open X"))],grounding_supports=[],web_search_queries=["WPP Open X"])
             return SimpleNamespace(text=json.dumps(research_payload()),candidates=[SimpleNamespace(grounding_metadata=metadata)],usage_metadata=usage)
         if "generate_ad_doctor_content_package" in prompt:
@@ -143,7 +145,7 @@ class GeminiOnlyProductionTests(unittest.TestCase):
             package=AdDoctorContentService(self.db,providers.content).generate(self.case,evidence)
             review=QualityAuditService(self.db,providers.quality).audit(package,evidence)
         self.assertEqual(len(self.models.calls),3)
-        self.assertEqual(self.models.calls[0]["config"]["tools"],[{"google_search":{}}])
+        self.assertIsNotNone(self.models.calls[0]["config"].tools[0].google_search)
         self.assertNotIn("tools",self.models.calls[1]["config"]);self.assertNotIn("tools",self.models.calls[2]["config"])
         self.assertEqual(package.generation_provider,"gemini");self.assertEqual(review.auditor_provider,"gemini")
 

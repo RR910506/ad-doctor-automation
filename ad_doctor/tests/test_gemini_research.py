@@ -11,7 +11,15 @@ PROJECT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_DIR))
 
 from src.adapters.gemini_evidence_adapter import GeminiEvidenceAdapter
-from src.adapters.gemini_research_provider import GEMINI_MODEL, GeminiResearchProvider, GroundedSource, NormalizedResearchResult, ResearchProvider
+from src.adapters.gemini_research_provider import (
+    GEMINI_MODEL,
+    GeminiProviderError,
+    GeminiResearchProvider,
+    GroundedSource,
+    NormalizedResearchResult,
+    ResearchProvider,
+    classify_gemini_error,
+)
 from src.domain.errors import DomainValidationError
 from src.domain.evidence_pack import EvidencePack
 from src.security.providers import EnvironmentSecretProvider
@@ -71,12 +79,72 @@ class GeminiResearchTest(unittest.TestCase):
         class BadModels:
             def generate_content(self,**kwargs): raise RuntimeError("request failed with secret-value")
         provider=GeminiResearchProvider(api_key="secret-value",client=SimpleNamespace(models=BadModels()))
-        with self.assertRaises(RuntimeError) as caught: provider.research(topic="t",source_articles=[],research_brief="b")
+        with self.assertRaises(GeminiProviderError) as caught: provider.research(topic="t",source_articles=[],research_brief="b")
         self.assertNotIn("secret-value",str(caught.exception))
 
     def test_search_grounding_is_enabled(self):
         provider,models=self.provider(); provider.research(topic="t",source_articles=[],research_brief="b")
-        self.assertEqual(models.calls[0]["config"]["tools"],[{"google_search": {}}])
+        config=models.calls[0]["config"]
+        self.assertIsNotNone(config.tools[0].google_search)
+        self.assertEqual(config.response_mime_type,"application/json")
+
+    def test_diagnostic_call_uses_typed_grounding_without_structured_output(self):
+        provider,models=self.provider(); result=provider.diagnose_grounding(prompt="minimal")
+        config=models.calls[0]["config"]
+        self.assertIsNotNone(config.tools[0].google_search)
+        self.assertIsNone(config.response_mime_type)
+        self.assertTrue(result.grounding_present)
+        self.assertEqual(result.grounded_source_count,1)
+
+    def test_safe_error_categories(self):
+        cases = (
+            (400,"INVALID_ARGUMENT","request_invalid"),
+            (400,"FAILED_PRECONDITION","prerequisite_failed"),
+            (401,"UNAUTHENTICATED","authentication_failed"),
+            (403,"PERMISSION_DENIED","permission_denied"),
+            (404,"NOT_FOUND","model_not_found"),
+            (429,"RESOURCE_EXHAUSTED","quota_exhausted"),
+            (503,"UNAVAILABLE","provider_unavailable"),
+            (418,"UNKNOWN","provider_error"),
+        )
+        for code,status,category in cases:
+            with self.subTest(code=code,status=status):
+                exc=type("ClientError",(Exception,),{})("raw provider response")
+                exc.code=code;exc.status=status
+                self.assertEqual(classify_gemini_error(exc).category,category)
+
+    def test_raw_provider_data_cannot_leak_from_safe_error(self):
+        secret="synthetic-secret-never-expose"
+        exc=type("ClientError",(Exception,),{})(f"raw response Authorization: {secret}")
+        exc.code=400;exc.status="INVALID_ARGUMENT";exc.details={"prompt":secret,"body":secret}
+        diagnostic=classify_gemini_error(exc)
+        error=GeminiProviderError(diagnostic)
+        rendered=f"{error!s} {error!r} {diagnostic!r}"
+        self.assertNotIn(secret,rendered)
+        self.assertNotIn("raw response",rendered)
+        self.assertFalse(hasattr(error,"__cause__") and error.__cause__ is exc)
+
+    def test_provider_failure_does_not_log_secret_or_raw_response(self):
+        secret="synthetic-not-a-real-key"
+        class BadModels:
+            def generate_content(self,**kwargs):
+                exc=type("ClientError",(Exception,),{})(f"raw response {secret}")
+                exc.code=403;exc.status="PERMISSION_DENIED";exc.details={"authorization":secret}
+                raise exc
+        provider=GeminiResearchProvider(api_key=secret,client=SimpleNamespace(models=BadModels()))
+        logger=logging.getLogger()
+        stream=logging.StreamHandler()
+        records=[]
+        stream.emit=lambda record: records.append(record.getMessage())
+        logger.addHandler(stream)
+        try:
+            with self.assertRaises(GeminiProviderError):
+                provider.research(topic="sensitive prompt",source_articles=[],research_brief="private")
+        finally:
+            logger.removeHandler(stream)
+        rendered=" ".join(records)
+        self.assertNotIn(secret,rendered)
+        self.assertNotIn("raw response",rendered)
 
     def test_grounding_metadata_is_parsed(self):
         provider,_=self.provider(); result=provider.research(topic="t",source_articles=[],research_brief="b")

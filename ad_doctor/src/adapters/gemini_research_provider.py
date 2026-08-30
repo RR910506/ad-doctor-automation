@@ -37,6 +37,34 @@ class NormalizedResearchResult:
     usage: dict[str, int]
 
 
+@dataclass(frozen=True, slots=True)
+class SafeGeminiError:
+    exception_class: str
+    code: int | None
+    status: str
+    category: str
+
+
+class GeminiProviderError(RuntimeError):
+    """Provider failure containing only allow-listed, non-sensitive metadata."""
+
+    def __init__(self, diagnostic: SafeGeminiError) -> None:
+        self.diagnostic = diagnostic
+        super().__init__(
+            "Gemini provider error: "
+            f"class={diagnostic.exception_class} code={diagnostic.code} "
+            f"status={diagnostic.status} category={diagnostic.category}"
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class GeminiDiagnosticResult:
+    model: str
+    grounding_present: bool
+    grounded_source_count: int
+    usage: dict[str, int]
+
+
 class GeminiResearchProvider:
     """Official Gemini client adapter with mandatory Google Search grounding."""
 
@@ -60,15 +88,10 @@ class GeminiResearchProvider:
             response = self._client.models.generate_content(
                 model=self.model,
                 contents=prompt,
-                config={
-                    "tools": [{"google_search": {}}],
-                    "response_mime_type": "application/json",
-                    "temperature": 0.1,
-                },
+                config=_grounded_config(structured_json=True),
             )
         except Exception as exc:
-            # Never include provider messages: some HTTP clients echo request headers.
-            raise RuntimeError(f"Gemini grounded research failed ({type(exc).__name__})") from None
+            raise GeminiProviderError(classify_gemini_error(exc)) from None
         text = str(getattr(response, "text", "") or "").strip()
         structured = _parse_json(text)
         metadata = _first_grounding_metadata(response)
@@ -83,6 +106,77 @@ class GeminiResearchProvider:
             grounding_metadata=_safe_metadata(metadata),
             usage=usage,
         )
+
+    def diagnose_grounding(self, *, prompt: str) -> GeminiDiagnosticResult:
+        """Make a minimal grounded call without structured output or persistence."""
+        try:
+            response = self._client.models.generate_content(
+                model=self.model,
+                contents=prompt,
+                config=_grounded_config(structured_json=False),
+            )
+        except Exception as exc:
+            raise GeminiProviderError(classify_gemini_error(exc)) from None
+        metadata = _first_grounding_metadata(response)
+        sources = _grounded_sources(metadata, {})
+        return GeminiDiagnosticResult(
+            model=self.model,
+            grounding_present=metadata is not None,
+            grounded_source_count=len(sources),
+            usage=_usage(getattr(response, "usage_metadata", None)),
+        )
+
+
+def classify_gemini_error(exc: BaseException) -> SafeGeminiError:
+    """Reduce an SDK error to an allow-listed diagnostic without reading its message."""
+    code_value = getattr(exc, "code", None)
+    try:
+        code = int(code_value) if code_value is not None else None
+    except (TypeError, ValueError):
+        code = None
+
+    status_value = getattr(exc, "status", None)
+    if isinstance(status_value, str):
+        status = status_value
+    else:
+        enum_value = getattr(status_value, "value", None)
+        enum_name = getattr(status_value, "name", None)
+        status = enum_value if isinstance(enum_value, str) else enum_name if isinstance(enum_name, str) else "UNKNOWN"
+    status = re.sub(r"[^A-Z0-9_]+", "_", status.upper()).strip("_")[:64] or "UNKNOWN"
+
+    if code == 400 and status == "INVALID_ARGUMENT":
+        category = "request_invalid"
+    elif code == 400 and status == "FAILED_PRECONDITION":
+        category = "prerequisite_failed"
+    elif code == 401:
+        category = "authentication_failed"
+    elif code == 403:
+        category = "permission_denied"
+    elif code == 404:
+        category = "model_not_found"
+    elif code == 429:
+        category = "quota_exhausted"
+    elif code is not None and 500 <= code <= 599:
+        category = "provider_unavailable"
+    else:
+        category = "provider_error"
+    return SafeGeminiError(
+        exception_class=type(exc).__name__,
+        code=code,
+        status=status,
+        category=category,
+    )
+
+
+def _grounded_config(*, structured_json: bool) -> object:
+    from google.genai import types
+
+    values: dict[str, object] = {
+        "tools": [types.Tool(google_search=types.GoogleSearch())],
+    }
+    if structured_json:
+        values.update(response_mime_type="application/json", temperature=0.1)
+    return types.GenerateContentConfig(**values)
 
 
 def _build_prompt(topic: str, source_articles: list[dict[str, object]], research_brief: str) -> str:
