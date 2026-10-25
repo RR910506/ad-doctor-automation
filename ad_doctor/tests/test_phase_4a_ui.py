@@ -23,7 +23,7 @@ class DesignNavigationTests(unittest.TestCase):
  def test_status_vocabulary_covers_workflow(self):
   labels=all_statuses()
   for status in WorkflowStatus:self.assertIn(status.value,labels);self.assertTrue(status_display(status.value).label)
- def test_navigation_has_eleven_pages_and_groups(self):self.assertEqual(set(ALL),set(PAGES));self.assertEqual(tuple(GROUPS),('WORKSPACE','DISTRIBUTION','SYSTEM'))
+ def test_navigation_has_workflow_pages_and_model_lab(self):self.assertEqual(set(ALL),set(PAGES)|{'model_lab'});self.assertEqual(tuple(GROUPS),('WORKSPACE','DISTRIBUTION','SYSTEM'))
  def test_route_resolution(self):self.assertEqual(resolve_page('cases'),'cases');self.assertEqual(resolve_page('unknown'),'dashboard');self.assertEqual(resolve_page('legacy'),'legacy')
 class FixtureFilteringTests(unittest.TestCase):
  def test_demo_defaults_false_and_is_in_memory(self):self.assertFalse(demo_mode_enabled({}));service=UIQueryService(demo=True);self.assertTrue(service.demo);self.assertIsNotNone(service.get('dashboard'))

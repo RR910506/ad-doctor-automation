@@ -12,6 +12,9 @@ that a free website account includes API calls. This workflow uses no paid API.
   research and does not independently verify claims.
 - The demo uses synthetic sources and offline drafts, solely for development.
 - The application does not yet import manually completed Perplexity research.
+- Expert workspace → AI tools & comparisons now prepares stage-specific briefs
+  and records pasted answers for comparison. These are unverified session
+  results, not imported Evidence Packs. Download the JSON to retain a comparison.
 
 ## Manual Perplexity research
 

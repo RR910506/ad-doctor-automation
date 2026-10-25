@@ -14,6 +14,12 @@ are interactive. Imports, approvals, scraping, publishing, email and provider
 calls are blocked. The legacy application cannot be opened in this demo.
 No database or persistent disk is required; no Chromium installation is needed.
 
+The simplified home has Today, My content and Publishing. Expand Expert
+workspace for sources, collection details and AI tools & comparisons. Model
+comparisons are manual browser-session experiments with downloadable results;
+they do not configure an API, validate evidence or update production records.
+See `PROJECT_PROGRESS.md` for current checks and outstanding work.
+
 Community Cloud may sleep when unused. This deployment is an interface demo,
 not the private production service. Deploying private team data and live actions
 requires authentication and persistent storage as a separate step. Check the

@@ -13,6 +13,7 @@ def _provider(st, item, input_label=None):
 
 def render(st, service, actions):
     page_header(st, 'Settings', 'Manage product configuration and safe provider connectivity.')
+    st.info('For the current free workflow, use Expert workspace → AI tools & comparisons. Perplexity website research is manual. Provider details below describe existing adapters, not verified live connections.')
     items = service.get('settings')
     if not items:
         empty_state(st, 'Settings adapter not connected', 'No secret values are displayed by the modern shell.', 'Use Legacy Workspace for existing configuration during migration.')

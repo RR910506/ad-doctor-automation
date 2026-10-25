@@ -20,6 +20,7 @@ class DashboardNavigationTests(unittest.TestCase):
                     with self.subTest(destination=destination):
                         app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / 'app.py')).run(timeout=30)
                         self.assertFalse(app.exception)
-                        app.button(key=f'home_{destination}').click().run(timeout=30)
+                        key = f'home_{destination}' if destination in ('sources', 'content_studio') else f'nav_{destination}'
+                        app.button(key=key).click().run(timeout=30)
                         self.assertFalse(app.exception)
                         self.assertEqual(app.query_params['page'], destination)
