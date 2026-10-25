@@ -5,10 +5,13 @@ from ui.navigation import GROUPS,ALL,resolve_page
 from ui.theme import apply_theme
 from ui.services.ui_query_service import UIQueryService,demo_mode_enabled
 from ui.services.ui_action_service import UIActionService
+from ui.services.demo_action_service import DemoActionService
 from ui.pages import dashboard,sources,articles,qualification,cases,content_studio,publishing,subscribers,automation,logs,settings
 PAGES={'dashboard':dashboard,'sources':sources,'articles':articles,'qualification':qualification,'cases':cases,'content_studio':content_studio,'publishing':publishing,'subscribers':subscribers,'automation':automation,'logs':logs,'settings':settings}
-def render_app():
+def render_app(*, community_demo=False):
  requested=resolve_page(str(st.query_params.get('page','dashboard')))
+ if community_demo and requested=='legacy':requested='dashboard'
+ if demo_mode_enabled() and requested=='legacy':requested='dashboard'
  if requested=='legacy':
   from ui.legacy_app import render_dashboard_shell
   prior_scheduler=os.environ.get('AD_DOCTOR_APP_SCHEDULER_ENABLED')
@@ -22,7 +25,7 @@ def render_app():
   return
  st.set_page_config(page_title='Ad Doctor',page_icon='🩺',layout='wide',initial_sidebar_state='auto');apply_theme(st)
  fixture_state=str(st.query_params.get('state','populated'))
- service=UIQueryService(state=fixture_state);actions=UIActionService()
+ service=UIQueryService(demo=True,state=fixture_state) if community_demo else UIQueryService(state=fixture_state);actions=DemoActionService() if service.demo else UIActionService()
  with st.sidebar:
   st.markdown('<div class="ad-kicker">THE AD DOCTOR</div><h2>Content Intelligence</h2>',unsafe_allow_html=True)
   if service.demo_label:

@@ -3,7 +3,7 @@ CSS=f"""
 <style>
 :root{{--ad-ink:{TOKENS['ink']};--ad-muted:{TOKENS['muted']};--ad-surface:{TOKENS['surface']};--ad-canvas:{TOKENS['canvas']};--ad-border:{TOKENS['border']};--ad-primary:{TOKENS['primary']};}}
 .stApp{{background:var(--ad-canvas);color:var(--ad-ink)}}
-.block-container{{max-width:1440px;padding-top:2rem;padding-bottom:4rem}}
+.block-container{{max-width:1440px;padding-top:3.5rem;padding-bottom:4rem}}
 h1,h2,h3{{letter-spacing:-.025em;color:var(--ad-ink)}}
 .ad-kicker{{font-size:.76rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ad-primary)}}
 .ad-page-copy,.ad-muted{{color:var(--ad-muted);line-height:1.55}}
@@ -21,6 +21,9 @@ h1,h2,h3{{letter-spacing:-.025em;color:var(--ad-ink)}}
 [data-testid="stMain"] [data-testid="stTabs"] button p{{color:var(--ad-ink)!important}}
 [data-testid="stMain"] [data-testid="stAlert"] p{{color:var(--ad-ink)!important}}
 [data-testid="stMain"] button:disabled{{opacity:.62}}
+[data-testid="stSidebar"]{{background:#FFFFFF;border-right:1px solid var(--ad-border)}}
+[data-testid="stVerticalBlockBorderWrapper"]{{border-radius:16px}}
+[data-testid="stMain"] button[kind="primary"]{{background:#B42318;border-color:#B42318;color:white}}
 :focus-visible{{outline:3px solid #84CAFF!important;outline-offset:2px!important}}
 @media(max-width:1100px){{[data-testid="stMain"] [data-testid="stHorizontalBlock"]:has([data-testid="stTextInput"]),[data-testid="stMain"] [data-testid="stHorizontalBlock"]:has([data-testid="stMetric"]){{flex-wrap:wrap}}[data-testid="stMain"] [data-testid="stHorizontalBlock"]:has([data-testid="stTextInput"])>[data-testid="stColumn"],[data-testid="stMain"] [data-testid="stHorizontalBlock"]:has([data-testid="stMetric"])>[data-testid="stColumn"]{{min-width:calc(50% - 1rem)!important;flex:1 1 calc(50% - 1rem)!important}}}}
 @media(max-width:760px){{.block-container{{padding:1rem}}.ad-row{{display:block}}h1{{font-size:1.75rem!important}}[data-testid="stMain"] [data-testid="stHorizontalBlock"]>[data-testid="stColumn"],[data-testid="stMain"] [data-testid="stHorizontalBlock"]:has([data-testid="stMetric"])>[data-testid="stColumn"],[data-testid="stMain"] [data-testid="stHorizontalBlock"]:has([data-testid="stTextInput"])>[data-testid="stColumn"]{{min-width:100%!important;flex:1 1 100%!important}}}}

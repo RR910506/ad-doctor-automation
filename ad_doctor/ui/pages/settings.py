@@ -63,4 +63,5 @@ def render(st, service, actions):
             _provider(st, by_name['Perplexity'])
         if 'OpenAI (optional)' in by_name:
             _provider(st, by_name['OpenAI (optional)'])
-        st.link_button('Open Legacy Workspace', '?page=legacy')
+        if not service.demo:
+            st.link_button('Open Legacy Workspace', '?page=legacy')

@@ -1,4 +1,5 @@
 from copy import deepcopy
+from dataclasses import replace
 
 from ui.view_models import *
 
@@ -73,10 +74,18 @@ def demo_payload():
         SourceListItem('Ad Age', 'adage.com', 'active', 'Healthy', {'type': 'Trade publication', 'last_scan': 'Today, 09:02', 'articles': 94, 'health': 'healthy'}),
         SourceListItem('Marketing Week', 'marketingweek.com', 'inactive', 'Needs attention', {'type': 'Trade publication', 'last_scan': 'Yesterday', 'articles': 51, 'health': 'warning'}),
     )
+    sources = tuple(replace(source, details={**source.details,
+        'id': index, 'active': source.status == 'active', 'category': 'Advertising',
+        'country': 'Sample', 'credibility_tier': 2})
+        for index, source in enumerate(sources, 1))
     articles = (
         ArticleListItem('Nike turns Olympic attention into participation', 'Ad Age · 18 Jul 2026', 'extracted', 'Linked', {'publication': 'Ad Age', 'date': '2026-07-18', 'summary': 'Nike’s move connects athlete attention with consumer participation.', 'topic': 'Nike Olympics participation campaign'}),
         ArticleListItem('How Nike is building an Olympics community play', 'Campaign India · 18 Jul 2026', 'extracted', 'Linked', {'publication': 'Campaign India', 'date': '2026-07-18', 'summary': 'The campaign uses community mechanics beyond conventional sponsorship.', 'topic': 'Nike Olympics participation campaign'}),
     )
+    articles = tuple(replace(article, details={**article.details,
+        'fetch_date': 'Sample run', 'extraction_status': 'Sample extraction',
+        'article_text': 'Illustrative sample coverage for interface exploration. Not verified reporting.'})
+        for article in articles)
     topics = (
         TopicQualificationItem('Nike Olympics participation campaign', 'Nike · 4 distinct publications', 'qualified', 'Qualified', {'count': 4, 'supporting': list(articles), 'excluded': ['Nike quarterly earnings recap'], 'reason': 'Covered by 4 distinct approved publications.'}),
         TopicQualificationItem('Retail media measurement debate', 'Category topic · 2 distinct publications', 'qualification_pending', 'Awaiting third publication', {'count': 2, 'supporting': list(articles[:1]), 'excluded': [], 'reason': 'One more distinct publication is required.'}),
