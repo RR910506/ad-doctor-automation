@@ -3,6 +3,34 @@
 Updated: 25 October 2026. Scope: private-team marketing intelligence tool;
 free manual Perplexity research initially, with replaceable research and writing tools.
 
+Latest update: 26 October 2026. The user selected Gemini API for research and
+writing. This supersedes the earlier preference for free manual Perplexity as
+the immediate implementation target.
+
+## Gemini API milestone — 26 October
+
+- [x] Added separate `ad_doctor/gemini_app.py` real-input workspace with a
+  password gate; the public demo remains free of provider calls.
+- [x] Discover generation models from the configured Google account instead
+  of relying on unverified hard-coded model IDs in older adapters.
+- [x] Separate research and writing model selection and explicit calls.
+- [x] Require human research review before drafting; outputs remain unverified
+  research or drafts pending review, never automatically approved evidence.
+- [x] Bound request size and output, disable automatic retry/fallback, reuse
+  successful identical session requests, and redact provider error details.
+- [x] Provide downloadable research and drafts with model and token metadata.
+- [x] 316 tests pass, including simulated API flow and access protection.
+- [ ] Owner supplies `GEMINI_API_KEY` and `AD_DOCTOR_ACCESS_PASSWORD` securely
+  in Streamlit Secrets and deploys the new entrypoint. See `GEMINI_SETUP.md`.
+- [ ] Verify actual model listing and research/writing inference with Google.
+- [ ] Connect approved-source collection, durable experiment storage, validated
+  Evidence Packs, quality gates and case lifecycle to this workspace.
+
+No Gemini key was present in the execution environment or saved environment
+requirements when checked. No live API call or free-quota eligibility has been
+verified. The new workspace requires pasted source excerpts and manual topic
+qualification; it does not browse supplied links or scrape automatically.
+
 ## Current release
 
 The `streamlit-community-demo` branch contains a public, read-only sample
