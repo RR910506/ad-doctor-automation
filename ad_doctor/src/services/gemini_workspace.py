@@ -15,9 +15,27 @@ class GeminiWorkspace:
     def available_models(self):
         try:
             models = self.client.models.list()
-            return sorted({m.name.removeprefix('models/') for m in models
-                           if m.name and 'generateContent' in (m.supported_actions or [])
-                           and not any(x in m.name.lower() for x in ('image', 'tts', 'audio', 'robotics', 'embedding'))})
+            # Google's catalogue includes models that technically expose
+            # generateContent but need another API, return audio/images, or are
+            # agent-only. They cannot run this text-only workspace. Excluding
+            # retired 2.5 names also prevents a new account being given a model
+            # that Google's API lists but rejects at inference time.
+            excluded = (
+                'image', 'tts', 'audio', 'robotics', 'embedding', 'transcribe',
+                'computer-use', 'antigravity', 'deep-research', 'lyria', 'omni',
+                'gemini-2.5-',
+            )
+            names = {m.name.removeprefix('models/') for m in models
+                     if m.name and 'generateContent' in (m.supported_actions or [])
+                     and not any(x in m.name.lower() for x in excluded)}
+            # Prefer current Flash models for a first test: they are intended
+            # for prompt/response use and typically have the lowest latency.
+            preferred = ('gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash',
+                         'gemini-3.5-flash', 'gemini-flash-latest', 'gemini-pro-latest')
+            return sorted(names, key=lambda name: (
+                next((index for index, prefix in enumerate(preferred) if name.startswith(prefix)), len(preferred)),
+                name,
+            ))
         except Exception as exc:
             raise GeminiProviderError(classify_gemini_error(exc)) from None
 

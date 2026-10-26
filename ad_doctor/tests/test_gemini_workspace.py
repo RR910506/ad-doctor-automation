@@ -18,6 +18,15 @@ class GeminiWorkspaceTests(unittest.TestCase):
         ]
         self.assertEqual(GeminiWorkspace(client=client).available_models(), ['gemini-account-model'])
 
+    def test_model_list_prefers_current_flash_model(self):
+        client = Mock()
+        client.models.list.return_value = [
+            SimpleNamespace(name='models/gemini-2.5-flash', supported_actions=['generateContent']),
+            SimpleNamespace(name='models/gemma-4-31b-it', supported_actions=['generateContent']),
+            SimpleNamespace(name='models/gemini-3.8-flash', supported_actions=['generateContent']),
+        ]
+        self.assertEqual(GeminiWorkspace(client=client).available_models(), ['gemini-3.8-flash', 'gemma-4-31b-it'])
+
     def test_stages_and_no_automatic_fallback(self):
         client = Mock()
         client.models.generate_content.return_value = SimpleNamespace(text='A sourced memo', usage_metadata=None)
