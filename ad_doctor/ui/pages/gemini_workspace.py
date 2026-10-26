@@ -1,13 +1,30 @@
 """Real-input Gemini interface. Calls are delegated to a service."""
 import json
 import hashlib
+import tempfile
+from pathlib import Path
+from src.services.publication_collection import collect_publications
 from src.adapters.gemini_research_provider import GeminiProviderError
 
 
 def render(st, workspace):
     st.title('Your Gemini workspace')
-    st.write('Bring real source excerpts, research the topic, then prepare a draft.')
-    st.caption('No sample content. Research analyzes your supplied text; URL browsing and automatic collection are not enabled in this workspace.')
+    st.write('Collect your approved publications, research qualifying topics, then prepare a draft.')
+    if st.button('Collect approved publications'):
+        if 'collection_database' not in st.session_state:
+            st.session_state['collection_database'] = str(Path(tempfile.mkdtemp(prefix='ad-doctor-')) / 'collection.db')
+        try:
+            with st.spinner('Collecting full articles and comparing coverage. This can take several minutes…'):
+                st.session_state['publication_collection'] = collect_publications(st.session_state['collection_database'])
+        except Exception:
+            st.error('Collection failed. Check server logs and source access before retrying.')
+    collection = st.session_state.get('publication_collection')
+    if collection:
+        st.caption(collection['limitations'])
+        st.write(f"{len(collection['topics'])} topics have full text from at least three publisher groups in this run.")
+        with st.expander('Collection report'):
+            st.json(collection['collection'])
+            st.download_button('Download collection report', json.dumps(collection, indent=2), 'collection-report.json')
     if st.button('Check connection and load available models'):
         try:
             st.session_state['gemini_available_models'] = workspace.available_models()
@@ -20,10 +37,18 @@ def render(st, workspace):
         return
     st.caption('A listed model is not necessarily free. Confirm your project’s API tier and limits in Google AI Studio. Calls may consume quota or incur charges on a billed project. No automatic retries or fallback calls are made.')
     research_model = st.selectbox('Research model', models)
-    topic = st.text_input('Exact marketing topic', max_chars=500)
-    material = st.text_area('Paste real article excerpts with publication names and source URLs', height=200, max_chars=40000)
-    qualified = st.checkbox('I confirm this exact topic is covered by at least three distinct approved publications')
-    st.caption('This confirmation is your manual qualification check. The existing automated qualification pipeline is not connected to this workspace yet.')
+    candidates = collection['topics'] if collection else []
+    if candidates:
+        index = st.selectbox('Collected topic', range(len(candidates)), format_func=lambda i: candidates[i]['topic'])
+        topic, material = candidates[index]['topic'], candidates[index]['material']
+        qualified = True
+        with st.expander('Source evidence supplied to Gemini'):
+            st.text(material)
+    else:
+        st.info('Collect publications to populate topics automatically. Manual input below is available for diagnostics.')
+        topic = st.text_input('Exact marketing topic', max_chars=500)
+        material = st.text_area('Paste real article excerpts with publication names and source URLs', height=200, max_chars=40000)
+        qualified = st.checkbox('I confirm this exact topic is covered by at least three distinct approved publications')
     identity = hashlib.sha256(json.dumps([topic, material, research_model]).encode()).hexdigest()
     if st.button('Research with Gemini', disabled=not(topic.strip() and material.strip() and qualified)):
         if st.session_state.get('gemini_research_id') == identity:

@@ -1,5 +1,24 @@
 # Ad Doctor project progress
 
+## Collection connection — 26 October 2026
+
+- Gemini workspace now has Collect approved publications; imports the supplied
+  30-source CSV once into a separate local database, requests full-text discovery,
+  groups articles and qualifies current-run coverage before offering topics.
+- Research input is populated from at least three active publisher groups with
+  extracted text. Duplicate Campaign editions do not independently satisfy the gate.
+- Collection reports include failures and explicit time-budget limitations.
+- Existing exhaustive discovery option is enabled with a 90-second per-source
+  budget. This does NOT implement full archive/pagination traversal, persistent
+  resumable crawl queues, site-specific adapters or guaranteed completeness.
+- Still required: scheduled execution integrated with this workspace, durable
+  hosting/storage, evidence validation and quality gates before unattended drafts.
+- Live validation blocked here: publication HTTPS request received proxy 403;
+  Gemini API key remains absent from development. The key in Streamlit cannot
+  be read by this environment. Hosted generation has not been verified.
+- Current collection database is temporary local storage, not durable across
+  Streamlit redeploys. Source and report downloads remain necessary.
+
 Updated: 25 October 2026. Scope: private-team marketing intelligence tool;
 free manual Perplexity research initially, with replaceable research and writing tools.
 
