@@ -3,6 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
+from tempfile import TemporaryDirectory
 from streamlit.testing.v1 import AppTest
 from src.services.gemini_workspace import GeminiWorkspace
 from src.adapters.gemini_research_provider import GeminiProviderError
@@ -57,7 +58,7 @@ class GeminiWorkspaceTests(unittest.TestCase):
 
     def test_gate_prevents_api_client_before_login(self):
         entry = str(Path(__file__).resolve().parents[1] / 'gemini_app.py')
-        with patch.dict(os.environ, {'AD_DOCTOR_ACCESS_PASSWORD': 'test-workspace-password', 'GEMINI_API_KEY': 'fake-test-key'}), patch('src.services.gemini_workspace.GeminiWorkspace') as factory:
+        with patch.dict(os.environ, {'AD_DOCTOR_ACCESS_PASSWORD': 'test-workspace-password', 'GEMINI_API_KEY': 'fake-test-key'}), patch('ui.team_app.ProviderRegistry') as factory:
             app = AppTest.from_file(entry).run()
             self.assertFalse(app.exception)
             factory.assert_not_called()
@@ -66,27 +67,19 @@ class GeminiWorkspaceTests(unittest.TestCase):
             factory.assert_not_called()
             self.assertTrue(app.error)
 
-    def test_authenticated_real_input_flow_and_duplicate_click(self):
+    def test_authenticated_app_is_provider_independent_and_does_not_call_ai_on_open(self):
         entry = str(Path(__file__).resolve().parents[1] / 'gemini_app.py')
-        client = Mock()
-        client.models.list.return_value = [SimpleNamespace(name='models/account-model', supported_actions=['generateContent'])]
-        client.models.generate_content.return_value = SimpleNamespace(text='Source-linked memo', usage_metadata=None)
-        service = GeminiWorkspace(client=client)
-        with patch.dict(os.environ, {'AD_DOCTOR_ACCESS_PASSWORD': 'test-workspace-password', 'GEMINI_API_KEY': 'fake-test-key'}), patch('src.services.gemini_workspace.GeminiWorkspace', return_value=service):
+        from src.services.ai_providers import ProviderRegistry
+        service = ProviderRegistry(lambda name: '')
+        with TemporaryDirectory() as directory, patch.dict(os.environ, {'AD_DOCTOR_ACCESS_PASSWORD': 'test-workspace-password', 'GEMINI_API_KEY': '', 'AD_DOCTOR_STATE_DATABASE': str(Path(directory) / 'state.db')}), patch('ui.team_app.ProviderRegistry', return_value=service), patch.object(service, 'generate_json') as generate:
             app = AppTest.from_file(entry)
             app.session_state['_access_proof'] = 'test-workspace-password'
             app.run()
-            next(b for b in app.button if b.label.startswith('Check connection')).click().run()
-            app.text_input[0].set_value('Brand campaign')
-            app.text_area[0].set_value('Three supplied publication excerpts and URLs')
-            app.checkbox[0].check().run()
-            next(b for b in app.button if b.label == 'Research with Gemini').click().run()
             self.assertFalse(app.exception)
-            self.assertEqual(client.models.generate_content.call_count, 1)
-            next(b for b in app.button if b.label == 'Research with Gemini').click().run()
-            self.assertEqual(client.models.generate_content.call_count, 1)
-            app.checkbox[1].check().run()
-            next(b for b in app.button if b.label == 'Create draft with Gemini').click().run()
+            next(b for b in app.button if b.label == 'AI settings').click().run()
             self.assertFalse(app.exception)
-            self.assertEqual(client.models.generate_content.call_count, 2)
-            self.assertEqual(app.session_state['gemini_draft']['status'], 'pending_review')
+            providers = [box for box in app.selectbox if box.label == 'Provider']
+            self.assertEqual(len(providers), 3)
+            self.assertIn('Perplexity', providers[0].options)
+            self.assertIn('Anthropic Claude', providers[2].options)
+            generate.assert_not_called()

@@ -1,5 +1,11 @@
 # Real Gemini API workspace
 
+> Updated 28 October 2026: the existing `gemini_app.py` entrypoint now forwards to
+> the provider-independent Ad Doctor app. Gemini is only a temporary testing
+> choice. Follow [AD_DOCTOR_SETUP.md](AD_DOCTOR_SETUP.md) for current instructions,
+> separate research/writing/quality providers, automatic collection and saved
+> content. The instructions below describe the earlier diagnostic milestone.
+
 This is a separate, password-gated entrypoint using real supplied text. It does
 not change the public sample demo into a production service. Google API access
 has not been tested until the owner supplies a key and a generation succeeds.

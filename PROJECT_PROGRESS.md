@@ -1,5 +1,64 @@
 # Ad Doctor project progress
 
+## Current release — 28 October 2026 (India time)
+
+Earlier entries below are a historical log. Their Gemini-only/manual-input/key
+limitations are superseded by this release; external activation is tracked here.
+
+- [x] Provider-independent private app (`ad_doctor_app.py`) and compatibility
+  entrypoint (`gemini_app.py`) preserving the existing second Streamlit URL.
+- [x] First app's shared theme, branding, card style and Article/Carousel/Expert
+  layout; real navigation for Today, My content and Publishing.
+- [x] Independent provider/model choices for research, writing and quality.
+  Gemini, OpenAI, Perplexity, Claude and HTTPS compatible adapters; no hidden
+  provider fallback. Gemini remains a temporary testing choice.
+- [x] Explicit model discovery, secure credential resolution, bounded requests,
+  structured-response validation and sanitized failure categories.
+- [x] Automatic approved-source collection, section-aware navigation, RSS,
+  sitemaps, deep pagination, persistent URL frontier, browser fallback, robots
+  rules on redirects, bounded retries and explicit unread/access reports.
+- [x] Every known queued URL is checkpointed by default in immutable chunks.
+  Storage failures preserve the previous manifest; storage quotas remain real.
+- [x] Recent current-run full text from three independent approved publisher
+  groups is required; source wording/citations are validated before writing.
+- [x] Structured evidence-only writing, independent quality review, one bounded
+  revision, and held output for failed evidence/quality checks.
+- [x] Saved run/evidence/draft/review/experiment records in local SQLite or a
+  private Supabase table. Distributed claims, stage checkpoints and recovery.
+- [x] Model Lab compares the same brief with actual selected providers; stores
+  latency, usage and subjective ratings. Trials never approve production data.
+- [x] Human editorial approval with concurrent-review protection; citation-rich
+  Markdown export, approved-only private Google Docs and SMTP delivery adapters.
+- [x] Explicit subscriber consent, suppression, approval-required batches and
+  per-recipient duplicate/uncertain-outcome protection.
+- [x] Independent provider-neutral worker, lightweight schedule probe and
+  disabled-by-default GitHub workflow. No Codex session needed after activation.
+- [x] Live 30-publication scan: 429 distinct full-text pages, 124 dated within
+  72 hours. No topic met the three-publisher gate. No news draft was fabricated.
+  See `docs/validation/collection_report_2026-10-28.json` for access gaps.
+- [x] Live Gemini structured call succeeded; research quotes validated in a
+  synthetic test. Its writing call returned HTTP 504. That does not verify a
+  complete live real-news case. Recovery and provider switching are tested.
+- [x] Desktop/mobile private app browser checks: three independent provider
+  selectors, rendered metrics, no observed JS errors or horizontal overflow.
+- [x] 397 automated checks pass, including independent provider routes, model
+  switching with compatible stage reuse, large-queue checkpoint round trips,
+  approval conflicts, uncertain delivery outcomes and multi-batch subscribers.
+- [ ] Owner provisions Supabase and adds matching web/worker secrets.
+- [ ] Activate default-branch schedule with Actions secrets/enable variable;
+  verify an actual scheduled run while Streamlit is closed.
+- [ ] Other provider account credentials and real inference validation when
+  selected. Consumer subscriptions are separate from API access.
+- [ ] Google OAuth and SMTP setup plus explicit authorized live acceptance tests.
+- [ ] Complete a real qualifying news case through live AI and human review.
+
+Setup and requirements: [AD_DOCTOR_SETUP.md](AD_DOCTOR_SETUP.md),
+[AUTOMATION_SETUP.md](AUTOMATION_SETUP.md), [PUBLISHING_SETUP.md](PUBLISHING_SETUP.md).
+Free service quotas and publisher access determine operational limits. Complete
+publisher coverage and exact-time free hosting cannot be promised.
+
+## Historical milestone log
+
 ## Collection connection — 26 October 2026
 
 - Gemini workspace now has Collect approved publications; imports the supplied
