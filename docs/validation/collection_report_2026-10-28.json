@@ -1,0 +1,2598 @@
+{
+  "validation_date": "2026-10-28",
+  "run_id": "live_30_publications_20261028",
+  "method": "Live HTTPS collection on all 30 supplied publications; isolated temporary SQLite database. No AI calls or publishing.",
+  "per_source_seconds": 60,
+  "max_page_attempts_per_source": 60,
+  "articles_saved": 429,
+  "checkpoint_policy_at_validation": "The validation run used the previous 10,000 URL per-source remote checkpoint cap; the 5,444 overflow count below is historical evidence of that cap.",
+  "current_runtime_checkpoint_policy": "The released collector exports all discovered URLs without an automatic per-source cap. Shared storage chunks the checkpoint; storage-quota failures remain explicit. Section-only discovery has also been tightened to main-content story cards after this validation.",
+  "collection": {
+    "run_id": "live_30_publications_20261028",
+    "sources_checked": 30,
+    "articles_seen": 1029,
+    "inserted": 429,
+    "updated": 2,
+    "failed": 139,
+    "messages": [
+      "Ad Age: access_required; 0 URLs queued",
+      "Ads of the World: access_required; 0 URLs queued",
+      "Afaqs: partial; 5604 URLs queued",
+      "AWB (Ads with Benefits): partial; 9 URLs queued",
+      "Adweek: partial; 121 URLs queued",
+      "Best Ads on TV: partial; 485 URLs queued",
+      "Business Insider India – Advertising: robots_unavailable; 0 URLs queued",
+      "Branding in Asia: no_articles_read; 0 URLs queued",
+      "Brand Beats: partial; 11 URLs queued",
+      "Campaign Asia: no_articles_read; 103 URLs queued",
+      "Brandingmag: partial; 1088 URLs queued",
+      "Campaign Global: partial; 708 URLs queued",
+      "Deadline (Advertising Section): no_articles_read; 0 URLs queued",
+      "Campaign India: partial; 335 URLs queued",
+      "Creative Bloq: partial; 360 URLs queued",
+      "ET Brand Equity: partial; 861 URLs queued",
+      "Exchange4Media: partial; 1531 URLs queued",
+      "Little Black Book (LBB Online): partial; 15384 URLs queued",
+      "Mad Over Marketing (MOM): partial; 2 URLs queued",
+      "Marketing Dive: partial; 254 URLs queued",
+      "Marketing Interactive: partial; 3 URLs queued",
+      "Marketing Mind: partial; 3170 URLs queued",
+      "Marketing Monk: partial; 846 URLs queued",
+      "Marketing Moves: partial; 1341 URLs queued",
+      "Medianews4u: partial; 324 URLs queued",
+      "The Ad Network: no_articles_read; 0 URLs queued",
+      "Shots: partial; 14 URLs queued",
+      "Social Samosa: partial; 4500 URLs queued",
+      "Social Media Dissect: partial; 76 URLs queued",
+      "The Drum: partial; 145 URLs queued"
+    ],
+    "duration_seconds": 365.84
+  },
+  "status_counts": {
+    "access_required": 2,
+    "partial": 23,
+    "no_articles_read": 4,
+    "robots_unavailable": 1
+  },
+  "freshness": {
+    "within_72_hours": 124,
+    "undated": 149,
+    "distinct_fulltext_pages": 429
+  },
+  "qualified_topics": 0,
+  "checkpoint_overflow_urls": 5444,
+  "coverage": "Incomplete; undiscovered pages remain unknown, pending URLs and access failures are reported.",
+  "extraction_note": "Counts represent pages with extracted text of at least 300 characters. Article/topic classification is heuristic. Recent publication dates and three distinct publishers are required before AI drafts.",
+  "live_draft_verification": "No topic reached three distinct qualifying publishers in this bounded run. No live end-to-end research/draft claim is made.",
+  "source_reports": [
+    {
+      "source_id": 1,
+      "source_name": "Ad Age",
+      "website_url": "https://adage.com",
+      "status": "access_required",
+      "completeness": "unknown",
+      "attempted": 0,
+      "articles_read": 0,
+      "discovered": 0,
+      "blocked": 1,
+      "failed": 0,
+      "inserted": 0,
+      "updated": 0,
+      "browser_fallbacks": 0,
+      "queued": 0,
+      "robots_disallowed": 0,
+      "discovery_methods": [],
+      "issues": [
+        "robots_http_403; source left unread"
+      ],
+      "discovery_scope": "approved_publication_host",
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 2,
+      "source_name": "Campaign Global",
+      "website_url": "https://campaignlive.com",
+      "status": "partial",
+      "completeness": "unknown",
+      "attempted": 56,
+      "articles_read": 37,
+      "discovered": 757,
+      "blocked": 0,
+      "failed": 1,
+      "inserted": 37,
+      "updated": 0,
+      "browser_fallbacks": 0,
+      "queued": 708,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "article",
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [
+        {
+          "url": "https://campaignlive.com/feed",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://campaignlive.com/rss.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://campaignlive.com/article/campaign-chemistry-procter-gambles-marc-pritchard/1973217",
+          "outcome": "retry",
+          "http_status": null,
+          "error": "ReadTimeout"
+        }
+      ],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "not_found": 2,
+        "queued": 707,
+        "retry": 1,
+        "success": 53
+      },
+      "unread_known_urls": 710,
+      "budget_reached": true,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 3,
+      "source_name": "Campaign Asia",
+      "website_url": "https://campaignasia.com",
+      "status": "no_articles_read",
+      "completeness": "unknown",
+      "attempted": 60,
+      "articles_read": 0,
+      "discovered": 118,
+      "blocked": 17,
+      "failed": 40,
+      "inserted": 0,
+      "updated": 0,
+      "browser_fallbacks": 2,
+      "queued": 103,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "article",
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [
+        {
+          "url": "https://campaignasia.com/feed",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignasia.com/campaign-case-study-library",
+          "outcome": "retry",
+          "http_status": 200,
+          "error": "Error"
+        },
+        {
+          "url": "https://www.campaignasia.com/sitemap.xml",
+          "outcome": "retry",
+          "http_status": null,
+          "error": "ValueError"
+        },
+        {
+          "url": "https://www.campaignasia.com/article/campaign-asia-s-agency-performance-reviews-2026/4bvk2ex18m4gptpbwvab2t6d5q",
+          "outcome": "retry",
+          "http_status": 200,
+          "error": "Error"
+        },
+        {
+          "url": "https://www.campaignasia.com/article/mbappe-loses-chinese-sponsors-after-mao-dictator-remark-sparks-backlash/40npeshsyz0rk41e1j8m5xk25e",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://campaignasia.com/rss.xml",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignasia.com/article/japan-s-top-10-brands-2026/4yn7zzsgfs4zewmvcbr5d376n8",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignasia.com/article/2026-agency-of-the-year-shortlists-announced-across-apac/4j6xjjr4525t5vs6p4mh3mtdm1",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        },
+        {
+          "url": "https://campaignasia.com/sitemap.xml",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignasia.com/article/move-and-win-roundup-week-of-october-26-2026/4gw5y1jfpqfmhrc2885pw3b8wc",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignasia.com/article/prada-brings-designer-collections-into-chatgpt/4e8jv4k6511xf46b4j1nd8bjw9",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignasia.com/article/jay-z-confirmed-as-apple-music-super-bowl-lxi-halftime-show-headliner/4ahrkq3b8c8h3xg8r8v2hpzt5g",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignasia.com/article/tirtir-has-bts-v-and-a-viral-foundation-can-it-build-a-lasting-global-beauty-brand/43e92t1791bknz850vtjnbhf4w",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignasia.com/article/meta-delays-website-crawling-terms-after-publisher-backlash/45hzqgbrgdpgwwyjwts61e65wy",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignasia.com/article/marketing-alone-won-t-hit-tourism-australia-s-2035-goal-says-cmo-susan-coghill/4ghpyb6y1hgb02eqjsd3qydbxf",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignasia.com/article/mccann-global-cco-andres-ordonez-made-global-chairman/4k7n8g4xy19g845n532s5m714w",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignasia.com/article/ai-bills-will-trim-a-third-of-b2c-initiatives-agents-will-sway-75-of-b2b-buys-forrester/441skeybdh5cz33wmgqc2tq5xk",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignasia.com/article/just-being-seen-is-the-hardest-part-inside-adland-s-referral-only-hiring-market/4pkccd2vh055b55zqbqccax6cj",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignasia.com/article/john-wren-calls-merger-headwinds-substantially-done-as-omnicom-posts-7-2-growth/43f1bn0mnq66120b82bhm8dbdy",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignasia.com/article/mcdonald-s-walks-away-from-32-year-fifa-world-cup-sponsorship/4jfxfmp03tf07yxh6ysw5gqsmp",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignasia.com/article/campaign-asia-and-mediasense-launch-inside-the-pitch-2026-survey-in-southeast-asia/4c14kpv7q6jkw5cs7wcfqrh5x2",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignasia.com/article/x-and-threads-are-losing-ground-with-advertisers-can-they-win-it-back/4gazb5egpxxwpv1a9h15mgr75y",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignasia.com/article/my-four-simple-outtakes-after-30-plus-years-in-advertising/4a32y2wnqhw2bx6a6b7jfaymdw",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignasia.com/article/woolley-marketing-agency-pitches-were-predictable-long-before-ai/4xk3a5xqgy1qds4qahfh1656mf",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignasia.com/article/can-korean-perfume-become-the-next-k-beauty/4nt7crmszd78y6embbb8nssc53",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignasia.com/article/ian-whittaker-on-why-marketing-must-talk-finance-or-forfeit-the-budget/4mkwf1fr9708b28cykzf9am8wa",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignasia.com/article/we-were-born-here-we-grew-up-here-yuichi-toyoda-on-dentsu-s-asia-born-advantage/457w2hqtmzkfy7dq2gp47r9jc3",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignasia.com/article/is-our-cmo-minding-the-store-the-wpp-sony-warning-for-marketers/4ts6ewp8g7rymwg5y2e4y27qwa",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignasia.com/article/h1-2026-publicis-and-omnicom-pull-away-as-wpp-stabilises-and-dentsu-leans-on-japan/4tvwsdpq8zmnc4396n0fy495w7",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignasia.com/article/does-a-client-s-reputation-matter-to-agencies/4sbqj8kga9ey2vchkycta2vqwt",
+          "outcome": "retry",
+          "http_status": 429,
+          "error": null
+        }
+      ],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "not_found": 1,
+        "paywall": 17,
+        "queued": 63,
+        "retry": 40,
+        "success": 2
+      },
+      "unread_known_urls": 121,
+      "budget_reached": true,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 4,
+      "source_name": "Campaign India",
+      "website_url": "https://campaignindia.in",
+      "status": "partial",
+      "completeness": "unknown",
+      "attempted": 60,
+      "articles_read": 10,
+      "discovered": 382,
+      "blocked": 32,
+      "failed": 8,
+      "inserted": 10,
+      "updated": 0,
+      "browser_fallbacks": 6,
+      "queued": 335,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "article",
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [
+        {
+          "url": "https://campaignindia.in/feed",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://campaignindia.in/bulletins",
+          "outcome": "retry",
+          "http_status": 200,
+          "error": "Error"
+        },
+        {
+          "url": "https://www.campaignindia.in/sitemap.xml",
+          "outcome": "retry",
+          "http_status": null,
+          "error": "ValueError"
+        },
+        {
+          "url": "https://campaignindia.in/rss.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://campaignindia.in/sitemap.xml",
+          "outcome": "retry",
+          "http_status": null,
+          "error": "ValueError"
+        },
+        {
+          "url": "https://www.campaignindia.in/article/2026-agency-of-the-year-shortlists-announced-across-apac/4v40jc778201qrpgkankx5s543",
+          "outcome": "retry",
+          "http_status": 200,
+          "error": "Error"
+        },
+        {
+          "url": "https://www.campaignindia.in/article/kiran-ramamurthy-to-succeed-babita-baruah-as-vml-india-ceo/4y8cd5s5sk77h08ns86a1ve9nt",
+          "outcome": "retry",
+          "http_status": 200,
+          "error": "Error"
+        },
+        {
+          "url": "https://www.campaignindia.in/article/tagmango-and-clickfunnels-bet-on-creator-owned-audiences-with-backstage-pass/40dcfqtsmbwpb5gh18s1ach55g",
+          "outcome": "retry",
+          "http_status": 200,
+          "error": "Error"
+        },
+        {
+          "url": "https://www.campaignindia.in/article/the-independents-are-no-longer-the-alternative/4v5gbn9nra95zwsqvvsgqwgr5s",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignindia.in/article/ai-bills-will-trim-a-third-of-b2c-initiatives-agents-will-sway-75-of-b2b-buys-forrester/4aznc2k5jd0e8wjgphhjzc6ncv",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignindia.in/article/scaler-makes-the-case-for-technical-depth-in-the-age-of-vibe-coding/4g1ek3tvnfks2z2sc092e2v2wb",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignindia.in/article/mccann-global-cco-andres-ordonez-made-global-chairman/4ej8ma5xw8rtf7pwwrj7ve1nng",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignindia.in/article/why-many-brand-stories-don-t-survive-the-scroll/44bgw6x0056nt4eygjgxed4wm0",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignindia.in/article/cheil-india-appoints-geetika-chadha-to-lead-samsung-s-social-and-influencer-marketing/4dgmntm1yh6dtsswkrt8p605xe",
+          "outcome": "retry",
+          "http_status": 200,
+          "error": "Error"
+        },
+        {
+          "url": "https://www.campaignindia.in/article/the-point-of-sweat-can-running-events-deliver-emotional-equity-for-brands/4c5bvcce17jsy38k7zn4cn6wdd",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignindia.in/article/india-s-auto-brands-look-beyond-the-festive-sales-rush/48dzwjq5eqr6m1gg9r4xars9cz",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignindia.in/article/stop-designing-for-the-goldfish/4bhjhzeeb78nw3e15xcpv0f85k",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignindia.in/article/marketing-has-a-ranking-problem/4tsvk8gx7rtbhvmn8hdvs7z3ny",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignindia.in/article/sudhakar-nadkarni-1936-2026-design-for-the-common-man-not-the-elite/4ja7p8w4rdexhrahesjqf2jqxk",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignindia.in/article/comms-isn-t-fairy-dust/41wg9vkvwfwrds9r3r9gv7hr43",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignindia.in/article/built-to-last-made-to-evolve/4r7bcnf1pvxw513reg2xf32gdh",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignindia.in/article/agency-of-the-year-2026-shortlist-south-asia/4ya4vzhvyp1be014yk9w8598cn",
+          "outcome": "retry",
+          "http_status": 200,
+          "error": "Error"
+        },
+        {
+          "url": "https://www.campaignindia.in/article/mcdonald-s-walks-away-from-32-year-fifa-world-cup-sponsorship/4k2mw3aa27xgy2nxksd2s2zgny",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignindia.in/article/john-wren-calls-merger-headwinds-substantially-done-as-omnicom-posts-7-2-growth/4bb6ywda3nxabs3qba62sx3944",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignindia.in/article/lavazza-appoints-global-media-agency/4h4ses88n2gtm1nhw4vqp76awv",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignindia.in/article/omnicom-wins-coca-cola-s-north-american-media-business-wpp-retains-it-globally/4kkxb81jpcarrz2fs1g9yx3ax3",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignindia.in/article/cadbury-celebrations-turns-neighbourly-squabbles-into-diwali-sweetness/4thwxr72szp0gs4pbgw2zkvnxk",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignindia.in/article/tata-starbucks-makes-room-for-romance-at-diwali/47ng9advjtp7byn5tgebb4w443",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignindia.in/article/openai-s-the-notice-makes-chatgpt-the-new-family-member/433087pyw8vcr303vbjnad50xm",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.campaignindia.in/article/supertails-takes-diwali-s-noise-below-the-table/4e6vys1rce9nhtfpwhscdkjddn",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        }
+      ],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "not_found": 2,
+        "paywall": 32,
+        "queued": 327,
+        "retry": 8,
+        "success": 18
+      },
+      "unread_known_urls": 369,
+      "budget_reached": true,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 5,
+      "source_name": "Adweek",
+      "website_url": "https://adweek.com",
+      "status": "partial",
+      "completeness": "unknown",
+      "attempted": 51,
+      "articles_read": 9,
+      "discovered": 162,
+      "blocked": 16,
+      "failed": 0,
+      "inserted": 9,
+      "updated": 0,
+      "browser_fallbacks": 0,
+      "queued": 121,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "article",
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [
+        {
+          "url": "https://www.adweek.com/programmatic/shopmy-taps-ex-trade-desk-vet-jed-dederick-as-cro-to-scale-creator-commerce",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://adweek.com/rss.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://www.adweek.com/brand-marketing/7-eleven-bets-on-korean-food-and-drama-with-a-spicy-new-social-miniseries",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.adweek.com/convergent-tv/la28-reveals-star-powered-slogan-set-to-shine-across-olympics-marketing",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.adweek.com/brand-marketing/fantas-long-game-for-halloween-starts-with-creators-and-original-characters",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.adweek.com/commerce/half-of-shoppers-plan-to-buy-gifts-like-meals-or-event-tickets-deloitte-finds",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.adweek.com/brand-marketing/liquid-iv-taps-former-poppi-exec-jenny-danzi-as-cmo",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.adweek.com/media/people-instyle-intern-social-episodic-television",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.adweek.com/convergent-tv/skydance-ads-boss-reveals-new-leadership-team",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.adweek.com/brand-marketing/fantas-long-game-for-halloween-starts-with-creators-and-original-characters",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.adweek.com/convergent-tv/la28-reveals-star-powered-slogan-set-to-shine-across-olympics-marketing",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.adweek.com/media/bdg-targeting-record-profits",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.adweek.com/convergent-tv/skydance-ads-boss-reveals-new-leadership-team",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.adweek.com/brand-marketing/liquid-iv-taps-former-poppi-exec-jenny-danzi-as-cmo",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.adweek.com/brand-marketing/seth-rogen-checks-off-his-gift-list-in-sephoras-holiday-campaign",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.adweek.com/programmatic/pinterest-opens-its-inventory-to-programmatic-buyers-with-magnite-as-its-main-pipe",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        },
+        {
+          "url": "https://www.adweek.com/brand-marketing/mcdonalds-ends-32-year-fifa-world-cup-sponsorship-amid-marketing-overhaul",
+          "outcome": "paywall",
+          "http_status": 200,
+          "error": null
+        }
+      ],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "not_found": 1,
+        "paywall": 16,
+        "queued": 121,
+        "success": 34
+      },
+      "unread_known_urls": 138,
+      "budget_reached": true,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 6,
+      "source_name": "The Drum",
+      "website_url": "https://thedrum.com",
+      "status": "partial",
+      "completeness": "unknown",
+      "attempted": 11,
+      "articles_read": 1,
+      "discovered": 150,
+      "blocked": 0,
+      "failed": 4,
+      "inserted": 1,
+      "updated": 0,
+      "browser_fallbacks": 0,
+      "queued": 145,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "article",
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [
+        {
+          "url": "https://thedrum.com/feed",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://www.thedrum.com/news/the-marketing-brains-behind-squishmallows-is-preparing-for-its-barbie-movie-moment",
+          "outcome": "failed",
+          "http_status": 202,
+          "error": null
+        },
+        {
+          "url": "https://www.thedrum.com/news/the-great-marketing-makeover-why-proving-marketing-s-value-is-harder-than-ever",
+          "outcome": "failed",
+          "http_status": 202,
+          "error": null
+        },
+        {
+          "url": "https://thedrum.com/rss.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://www.thedrum.com/news/ad-of-the-day-racv-turns-down-the-drama-in-quietly-funny-insurance-ads",
+          "outcome": "failed",
+          "http_status": 202,
+          "error": null
+        },
+        {
+          "url": "https://thedrum.com/sitemap.xml",
+          "outcome": "retry",
+          "http_status": null,
+          "error": "ReadTimeout"
+        }
+      ],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "failed": 3,
+        "not_found": 2,
+        "queued": 144,
+        "retry": 1,
+        "success": 5
+      },
+      "unread_known_urls": 150,
+      "budget_reached": true,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 7,
+      "source_name": "Marketing Interactive",
+      "website_url": "https://marketing-interactive.com",
+      "status": "partial",
+      "completeness": "unknown",
+      "attempted": 40,
+      "articles_read": 6,
+      "discovered": 37,
+      "blocked": 0,
+      "failed": 1,
+      "inserted": 6,
+      "updated": 0,
+      "browser_fallbacks": 1,
+      "queued": 3,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "article",
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [
+        {
+          "url": "https://marketing-interactive.com/feed",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://www.marketing-interactive.com/brand-insights",
+          "outcome": "retry",
+          "http_status": 200,
+          "error": "Error"
+        },
+        {
+          "url": "https://marketing-interactive.com/rss.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://marketing-interactive.com/sitemap.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        }
+      ],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "not_found": 3,
+        "queued": 2,
+        "retry": 1,
+        "success": 36
+      },
+      "unread_known_urls": 6,
+      "budget_reached": false,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 8,
+      "source_name": "Little Black Book (LBB Online)",
+      "website_url": "https://lbbonline.com",
+      "status": "partial",
+      "completeness": "unknown",
+      "attempted": 60,
+      "articles_read": 30,
+      "discovered": 15439,
+      "blocked": 0,
+      "failed": 0,
+      "inserted": 30,
+      "updated": 0,
+      "browser_fallbacks": 0,
+      "queued": 15384,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "article",
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [
+        {
+          "url": "https://lbbonline.com/feed",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://lbbonline.com/rss.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        }
+      ],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "not_found": 2,
+        "queued": 15384,
+        "success": 58
+      },
+      "unread_known_urls": 15386,
+      "budget_reached": true,
+      "checkpoint_overflow_urls": 5444
+    },
+    {
+      "source_id": 9,
+      "source_name": "Ads of the World",
+      "website_url": "https://adsoftheworld.com",
+      "status": "access_required",
+      "completeness": "unknown",
+      "attempted": 0,
+      "articles_read": 0,
+      "discovered": 0,
+      "blocked": 1,
+      "failed": 0,
+      "inserted": 0,
+      "updated": 0,
+      "browser_fallbacks": 0,
+      "queued": 0,
+      "robots_disallowed": 0,
+      "discovery_methods": [],
+      "issues": [
+        "robots_http_403; source left unread"
+      ],
+      "discovery_scope": "approved_publication_host",
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 10,
+      "source_name": "Branding in Asia",
+      "website_url": "https://brandinginasia.com",
+      "status": "no_articles_read",
+      "completeness": "unknown",
+      "attempted": 4,
+      "articles_read": 0,
+      "discovered": 0,
+      "blocked": 0,
+      "failed": 4,
+      "inserted": 0,
+      "updated": 0,
+      "browser_fallbacks": 0,
+      "queued": 0,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [
+        {
+          "url": "https://brandinginasia.com/",
+          "outcome": "failed",
+          "http_status": 202,
+          "error": null
+        },
+        {
+          "url": "https://brandinginasia.com/feed",
+          "outcome": "failed",
+          "http_status": 202,
+          "error": null
+        },
+        {
+          "url": "https://brandinginasia.com/rss.xml",
+          "outcome": "failed",
+          "http_status": 202,
+          "error": null
+        },
+        {
+          "url": "https://brandinginasia.com/sitemap.xml",
+          "outcome": "failed",
+          "http_status": 202,
+          "error": null
+        }
+      ],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "failed": 4
+      },
+      "unread_known_urls": 4,
+      "budget_reached": false,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 11,
+      "source_name": "Social Samosa",
+      "website_url": "https://socialsamosa.com",
+      "status": "partial",
+      "completeness": "unknown",
+      "attempted": 60,
+      "articles_read": 30,
+      "discovered": 4553,
+      "blocked": 0,
+      "failed": 0,
+      "inserted": 30,
+      "updated": 0,
+      "browser_fallbacks": 0,
+      "queued": 4500,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "article",
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [
+        {
+          "url": "https://socialsamosa.com/feed",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://socialsamosa.com/rss.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        }
+      ],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "not_found": 2,
+        "queued": 4500,
+        "success": 58
+      },
+      "unread_known_urls": 4502,
+      "budget_reached": true,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 12,
+      "source_name": "Afaqs",
+      "website_url": "https://afaqs.com",
+      "status": "partial",
+      "completeness": "unknown",
+      "attempted": 60,
+      "articles_read": 30,
+      "discovered": 5656,
+      "blocked": 0,
+      "failed": 0,
+      "inserted": 30,
+      "updated": 0,
+      "browser_fallbacks": 0,
+      "queued": 5604,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "article",
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [
+        {
+          "url": "https://afaqs.com/feed",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://afaqs.com/rss.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        }
+      ],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "not_found": 2,
+        "queued": 5604,
+        "success": 58
+      },
+      "unread_known_urls": 5606,
+      "budget_reached": true,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 13,
+      "source_name": "Exchange4Media",
+      "website_url": "https://exchange4media.com",
+      "status": "partial",
+      "completeness": "unknown",
+      "attempted": 50,
+      "articles_read": 39,
+      "discovered": 1573,
+      "blocked": 0,
+      "failed": 1,
+      "inserted": 37,
+      "updated": 2,
+      "browser_fallbacks": 0,
+      "queued": 1531,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "article",
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [
+        {
+          "url": "https://www.exchange4media.com/industry-briefing-news/sharechat-and-moj-partner-with-glow-lovely-on-comedy-micro-drama-series-159547.html",
+          "outcome": "retry",
+          "http_status": null,
+          "error": "TimeoutError"
+        }
+      ],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "queued": 1530,
+        "retry": 1,
+        "success": 49
+      },
+      "unread_known_urls": 1531,
+      "budget_reached": true,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 14,
+      "source_name": "Best Ads on TV",
+      "website_url": "https://bestadsontv.com",
+      "status": "partial",
+      "completeness": "unknown",
+      "attempted": 46,
+      "articles_read": 31,
+      "discovered": 526,
+      "blocked": 0,
+      "failed": 1,
+      "inserted": 31,
+      "updated": 0,
+      "browser_fallbacks": 1,
+      "queued": 485,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "article",
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [
+        {
+          "url": "https://bestadsontv.com/rss.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://www.bestadsontv.com/ad/193801/Google-AI-The-Legendary-Dry-River-Boat",
+          "outcome": "retry",
+          "http_status": 200,
+          "error": "Error"
+        }
+      ],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "not_found": 1,
+        "queued": 484,
+        "retry": 1,
+        "success": 44
+      },
+      "unread_known_urls": 486,
+      "budget_reached": true,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 15,
+      "source_name": "Marketing Dive",
+      "website_url": "https://marketingdive.com",
+      "status": "partial",
+      "completeness": "unknown",
+      "attempted": 11,
+      "articles_read": 4,
+      "discovered": 261,
+      "blocked": 0,
+      "failed": 0,
+      "inserted": 4,
+      "updated": 0,
+      "browser_fallbacks": 0,
+      "queued": 254,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "article",
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [
+        {
+          "url": "https://marketingdive.com/feed",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://marketingdive.com/rss.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        }
+      ],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "not_found": 2,
+        "queued": 254,
+        "success": 9
+      },
+      "unread_known_urls": 256,
+      "budget_reached": true,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 16,
+      "source_name": "Shots",
+      "website_url": "https://shots.net",
+      "status": "partial",
+      "completeness": "unknown",
+      "attempted": 28,
+      "articles_read": 23,
+      "discovered": 36,
+      "blocked": 0,
+      "failed": 2,
+      "inserted": 23,
+      "updated": 0,
+      "browser_fallbacks": 0,
+      "queued": 14,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "article",
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [
+        {
+          "url": "https://shots.net/feed",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://shots.net/sitemap.xml",
+          "outcome": "retry",
+          "http_status": null,
+          "error": "PermissionError"
+        },
+        {
+          "url": "https://shots.net/rss.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://shots.net/news/view/banana-republic-debuts-the-agency",
+          "outcome": "retry",
+          "http_status": null,
+          "error": "ReadTimeout"
+        }
+      ],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "not_found": 2,
+        "queued": 12,
+        "retry": 2,
+        "success": 24
+      },
+      "unread_known_urls": 16,
+      "budget_reached": true,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 17,
+      "source_name": "Deadline (Advertising Section)",
+      "website_url": "https://deadline.com/v/advertising",
+      "status": "no_articles_read",
+      "completeness": "unknown",
+      "attempted": 3,
+      "articles_read": 0,
+      "discovered": 0,
+      "blocked": 0,
+      "failed": 0,
+      "inserted": 0,
+      "updated": 0,
+      "browser_fallbacks": 0,
+      "queued": 0,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "feed",
+        "listing"
+      ],
+      "issues": [
+        {
+          "url": "https://deadline.com/v/advertising",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://deadline.com/v/advertising/rss.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        }
+      ],
+      "discovery_scope": "https://deadline.com/v/advertising",
+      "frontier_outcomes": {
+        "not_found": 2,
+        "success": 1
+      },
+      "unread_known_urls": 2,
+      "budget_reached": false,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 18,
+      "source_name": "Creative Bloq",
+      "website_url": "https://creativebloq.com",
+      "status": "partial",
+      "completeness": "unknown",
+      "attempted": 32,
+      "articles_read": 13,
+      "discovered": 384,
+      "blocked": 0,
+      "failed": 2,
+      "inserted": 13,
+      "updated": 0,
+      "browser_fallbacks": 0,
+      "queued": 360,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "article",
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [
+        {
+          "url": "https://www.creativebloq.com/news/page/3",
+          "outcome": "retry",
+          "http_status": null,
+          "error": "ReadTimeout"
+        },
+        {
+          "url": "https://www.creativebloq.com/news/page/5",
+          "outcome": "retry",
+          "http_status": null,
+          "error": "ReadTimeout"
+        }
+      ],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "queued": 358,
+        "retry": 2,
+        "success": 30
+      },
+      "unread_known_urls": 360,
+      "budget_reached": true,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 19,
+      "source_name": "Brandingmag",
+      "website_url": "https://brandingmag.com",
+      "status": "partial",
+      "completeness": "unknown",
+      "attempted": 52,
+      "articles_read": 22,
+      "discovered": 1135,
+      "blocked": 0,
+      "failed": 0,
+      "inserted": 22,
+      "updated": 0,
+      "browser_fallbacks": 0,
+      "queued": 1088,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "article",
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [
+        {
+          "url": "https://brandingmag.com/rss.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://brandingmag.com/sitemap.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        }
+      ],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "not_found": 2,
+        "queued": 1088,
+        "success": 50
+      },
+      "unread_known_urls": 1090,
+      "budget_reached": true,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 20,
+      "source_name": "ET Brand Equity",
+      "website_url": "https://brandequity.economictimes.indiatimes.com",
+      "status": "partial",
+      "completeness": "unknown",
+      "attempted": 44,
+      "articles_read": 22,
+      "discovered": 891,
+      "blocked": 1,
+      "failed": 1,
+      "inserted": 22,
+      "updated": 0,
+      "browser_fallbacks": 1,
+      "queued": 861,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "article",
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [
+        {
+          "url": "https://brandequity.economictimes.indiatimes.com/feed",
+          "outcome": "blocked",
+          "http_status": 403,
+          "error": null
+        },
+        {
+          "url": "https://brandequity.economictimes.indiatimes.com/rss.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://brandequity.economictimes.indiatimes.com/contact_us.php",
+          "outcome": "retry",
+          "http_status": 200,
+          "error": "Error"
+        },
+        {
+          "url": "https://brandequity.economictimes.indiatimes.com/news/7",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        }
+      ],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "blocked": 1,
+        "not_found": 2,
+        "queued": 860,
+        "retry": 1,
+        "success": 40
+      },
+      "unread_known_urls": 864,
+      "budget_reached": true,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 21,
+      "source_name": "Medianews4u",
+      "website_url": "https://medianews4u.com",
+      "status": "partial",
+      "completeness": "unknown",
+      "attempted": 32,
+      "articles_read": 11,
+      "discovered": 351,
+      "blocked": 0,
+      "failed": 1,
+      "inserted": 11,
+      "updated": 0,
+      "browser_fallbacks": 0,
+      "queued": 324,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "article",
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [
+        {
+          "url": "https://medianews4u.com/rss.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://www.medianews4u.com/brands-roll-out-festive-campaigns-across-gifting-fashion-mobility-and-lifestyle",
+          "outcome": "retry",
+          "http_status": null,
+          "error": "ReadTimeout"
+        }
+      ],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "not_found": 1,
+        "queued": 323,
+        "retry": 1,
+        "success": 30
+      },
+      "unread_known_urls": 325,
+      "budget_reached": true,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 22,
+      "source_name": "Business Insider India – Advertising",
+      "website_url": "https://businessinsider.in/advertising",
+      "status": "robots_unavailable",
+      "completeness": "unknown",
+      "attempted": 0,
+      "articles_read": 0,
+      "discovered": 0,
+      "blocked": 0,
+      "failed": 0,
+      "inserted": 0,
+      "updated": 0,
+      "browser_fallbacks": 0,
+      "queued": 0,
+      "robots_disallowed": 0,
+      "discovery_methods": [],
+      "issues": [
+        "robots_unavailable:ProxyError"
+      ],
+      "discovery_scope": "https://businessinsider.in/advertising",
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 23,
+      "source_name": "Mad Over Marketing (MOM)",
+      "website_url": "https://mad-over-marketing.com",
+      "status": "partial",
+      "completeness": "unknown",
+      "attempted": 19,
+      "articles_read": 9,
+      "discovered": 16,
+      "blocked": 0,
+      "failed": 0,
+      "inserted": 9,
+      "updated": 0,
+      "browser_fallbacks": 0,
+      "queued": 2,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "article",
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "queued": 2,
+        "success": 19
+      },
+      "unread_known_urls": 2,
+      "budget_reached": true,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 24,
+      "source_name": "Social Media Dissect",
+      "website_url": "https://www.socialmediadissect.com",
+      "status": "partial",
+      "completeness": "unknown",
+      "attempted": 39,
+      "articles_read": 14,
+      "discovered": 111,
+      "blocked": 0,
+      "failed": 0,
+      "inserted": 14,
+      "updated": 0,
+      "browser_fallbacks": 0,
+      "queued": 76,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "article",
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [
+        {
+          "url": "https://www.socialmediadissect.com/rss.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        }
+      ],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "not_found": 1,
+        "queued": 76,
+        "success": 38
+      },
+      "unread_known_urls": 77,
+      "budget_reached": true,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 25,
+      "source_name": "AWB (Ads with Benefits)",
+      "website_url": "https://adswithbenefits.in",
+      "status": "partial",
+      "completeness": "unknown",
+      "attempted": 37,
+      "articles_read": 9,
+      "discovered": 40,
+      "blocked": 0,
+      "failed": 1,
+      "inserted": 9,
+      "updated": 0,
+      "browser_fallbacks": 0,
+      "queued": 9,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "article",
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [
+        {
+          "url": "https://adswithbenefits.in/rss.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://adswithbenefits.in/page/19",
+          "outcome": "retry",
+          "http_status": null,
+          "error": "ReadTimeout"
+        }
+      ],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "not_found": 1,
+        "queued": 8,
+        "retry": 1,
+        "success": 35
+      },
+      "unread_known_urls": 10,
+      "budget_reached": true,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 26,
+      "source_name": "Marketing Mind",
+      "website_url": "https://marketingmind.in",
+      "status": "partial",
+      "completeness": "unknown",
+      "attempted": 33,
+      "articles_read": 15,
+      "discovered": 3198,
+      "blocked": 0,
+      "failed": 0,
+      "inserted": 15,
+      "updated": 0,
+      "browser_fallbacks": 0,
+      "queued": 3170,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "article",
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [
+        {
+          "url": "https://marketingmind.in/rss.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        }
+      ],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "not_found": 1,
+        "queued": 3170,
+        "success": 32
+      },
+      "unread_known_urls": 3171,
+      "budget_reached": false,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 27,
+      "source_name": "The Ad Network",
+      "website_url": "https://www.theadnetwork.in",
+      "status": "no_articles_read",
+      "completeness": "unknown",
+      "attempted": 4,
+      "articles_read": 0,
+      "discovered": 0,
+      "blocked": 0,
+      "failed": 0,
+      "inserted": 0,
+      "updated": 0,
+      "browser_fallbacks": 0,
+      "queued": 0,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [
+        {
+          "url": "https://www.theadnetwork.in/feed",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://www.theadnetwork.in/rss.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://www.theadnetwork.in/sitemap.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        }
+      ],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "not_found": 3,
+        "success": 1
+      },
+      "unread_known_urls": 3,
+      "budget_reached": false,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 28,
+      "source_name": "Marketing Moves",
+      "website_url": "https://www.marketingmoves.in",
+      "status": "partial",
+      "completeness": "unknown",
+      "attempted": 60,
+      "articles_read": 36,
+      "discovered": 1397,
+      "blocked": 0,
+      "failed": 0,
+      "inserted": 36,
+      "updated": 0,
+      "browser_fallbacks": 0,
+      "queued": 1341,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "article",
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "queued": 1341,
+        "success": 60
+      },
+      "unread_known_urls": 1341,
+      "budget_reached": true,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 29,
+      "source_name": "Marketing Monk",
+      "website_url": "https://www.marketingmonk.so",
+      "status": "partial",
+      "completeness": "unknown",
+      "attempted": 45,
+      "articles_read": 22,
+      "discovered": 882,
+      "blocked": 0,
+      "failed": 1,
+      "inserted": 22,
+      "updated": 0,
+      "browser_fallbacks": 1,
+      "queued": 846,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "article",
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [
+        {
+          "url": "https://www.marketingmonk.so/feed",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://www.marketingmonk.so/rss.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://www.marketingmonk.so/jobboard/sitemap-jobs.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://www.marketingmonk.so/jobboard/sitemap.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://www.marketingmonk.so/agency-directory/sitemap.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://www.marketingmonk.so/products/sitemap.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://www.marketingmonk.so/forms/077e7fd5-508f-42c2-8453-ed842df2415c",
+          "outcome": "retry",
+          "http_status": 200,
+          "error": "Error"
+        }
+      ],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "not_found": 6,
+        "queued": 845,
+        "retry": 1,
+        "success": 38
+      },
+      "unread_known_urls": 852,
+      "budget_reached": true,
+      "checkpoint_overflow_urls": 0
+    },
+    {
+      "source_id": 30,
+      "source_name": "Brand Beats",
+      "website_url": "https://thebrandbeats.in",
+      "status": "partial",
+      "completeness": "unknown",
+      "attempted": 32,
+      "articles_read": 8,
+      "discovered": 35,
+      "blocked": 0,
+      "failed": 3,
+      "inserted": 8,
+      "updated": 0,
+      "browser_fallbacks": 1,
+      "queued": 11,
+      "robots_disallowed": 0,
+      "discovery_methods": [
+        "article",
+        "feed",
+        "listing",
+        "sitemap"
+      ],
+      "issues": [
+        {
+          "url": "https://thebrandbeats.in/rss.xml",
+          "outcome": "not_found",
+          "http_status": 404,
+          "error": null
+        },
+        {
+          "url": "https://thebrandbeats.in/wp-content/uploads/2026/05/Alia-Bhatt-And-Sharvari-Reportedly-Join-Samay-Rainas-%E2%80%98Indias-Got-Latent-2.avif",
+          "outcome": "retry",
+          "http_status": 200,
+          "error": "Error"
+        },
+        {
+          "url": "https://thebrandbeats.in/video-sitemap.xml",
+          "outcome": "retry",
+          "http_status": null,
+          "error": "ReadTimeout"
+        },
+        {
+          "url": "https://thebrandbeats.in/category/marketing/page/9",
+          "outcome": "retry",
+          "http_status": null,
+          "error": "ReadTimeout"
+        }
+      ],
+      "discovery_scope": "approved_publication_host",
+      "frontier_outcomes": {
+        "not_found": 1,
+        "queued": 8,
+        "retry": 3,
+        "success": 28
+      },
+      "unread_known_urls": 12,
+      "budget_reached": true,
+      "checkpoint_overflow_urls": 0
+    }
+  ],
+  "public_article_previews": [
+    {
+      "headline": "Brands light up Holi with colourful creatives",
+      "article_url": "https://www.socialmediadissect.com/brands-light-up-holi-with-colourful-creatives/",
+      "source_name": "Social Media Dissect",
+      "published_date": "2024-03-26T14:55:35+00:00",
+      "fetched_at": "2026-10-28 16:02:23"
+    },
+    {
+      "headline": "Brands light up Mother’s Day with heartfelt campaigns",
+      "article_url": "https://www.socialmediadissect.com/brands-light-up-mothers-day-with-heartfelt-campaigns/",
+      "source_name": "Social Media Dissect",
+      "published_date": "2024-05-10T13:23:32+00:00",
+      "fetched_at": "2026-10-28 16:02:19"
+    },
+    {
+      "headline": "Brands honor moms with heartwarming creatives on their special day",
+      "article_url": "https://www.socialmediadissect.com/brands-honor-moms-with-heartwarming-creatives-on-their-special-day/",
+      "source_name": "Social Media Dissect",
+      "published_date": "2024-05-13T13:27:31+00:00",
+      "fetched_at": "2026-10-28 16:02:16"
+    },
+    {
+      "headline": "Brands celebrate KKR's win at the IPL finale with dynamic creatives",
+      "article_url": "https://www.socialmediadissect.com/brands-celebrate-kkrs-win-at-the-ipl-finale-with-dynamic-creatives/",
+      "source_name": "Social Media Dissect",
+      "published_date": "2024-05-27T13:09:10+00:00",
+      "fetched_at": "2026-10-28 16:02:12"
+    },
+    {
+      "headline": "This Dussehra, brand creatives revisit the age-old battle between good and evil",
+      "article_url": "https://www.socialsamosa.com/topical-spot/dussehra-brand-creatives-2026-revisit-battle-between-good-evil-12695713",
+      "source_name": "Social Samosa",
+      "published_date": "2026-10-21T18:16:23.748+05:30",
+      "fetched_at": "2026-10-28 16:02:11"
+    },
+    {
+      "headline": "How brands became part of West Bengal’s Durga Pujo experience",
+      "article_url": "https://www.socialsamosa.com/topical-spot/brands-west-bengal-durga-pujo-experience-12696268",
+      "source_name": "Social Samosa",
+      "published_date": "2026-10-21T19:10:51.606+05:30",
+      "fetched_at": "2026-10-28 16:02:10"
+    },
+    {
+      "headline": "HUL’s ad spends decline 9.3% to ₹1,481 crore in September quarter",
+      "article_url": "https://www.socialsamosa.com/industry-updates/huls-ad-spends-decline-93-1481-cr-september-quarter-12761462",
+      "source_name": "Social Samosa",
+      "published_date": "2026-10-28T16:48:09.672+05:30",
+      "fetched_at": "2026-10-28 16:02:09"
+    },
+    {
+      "headline": "Brands encourage social media users to vote with inspiring creatives",
+      "article_url": "https://www.socialmediadissect.com/brands-encourage-social-media-users-to-vote-with-inspiring-creatives/",
+      "source_name": "Social Media Dissect",
+      "published_date": "2024-05-20T11:57:30+00:00",
+      "fetched_at": "2026-10-28 16:02:08"
+    },
+    {
+      "headline": "61% of Diwali-engaged consumers favour rituals as gold dominates Dhanteras search interest: Report",
+      "article_url": "https://www.socialsamosa.com/industry-updates/61-consumers-favour-rituals-gold-dominates-search-interest-12761516",
+      "source_name": "Social Samosa",
+      "published_date": "2026-10-28T17:06:41.933+05:30",
+      "fetched_at": "2026-10-28 16:02:07"
+    },
+    {
+      "headline": "Vineet Sharma steps down as AB InBev India’s VP of Marketing & Trade Marketing",
+      "article_url": "https://www.socialsamosa.com/industry-updates/vineet-sharma-steps-down-ab-inbev-india-vp-marketing-trade-marketing-12761463",
+      "source_name": "Social Samosa",
+      "published_date": "2026-10-28T17:13:50.998+05:30",
+      "fetched_at": "2026-10-28 16:02:06"
+    },
+    {
+      "headline": "Meta extends deadline for updated commercial terms to November 20",
+      "article_url": "https://www.socialsamosa.com/news-2/meta-extends-deadline-updated-commercial-terms-november-20-12752246",
+      "source_name": "Social Samosa",
+      "published_date": "2026-10-26T11:31:31.135+05:30",
+      "fetched_at": "2026-10-28 16:02:06"
+    },
+    {
+      "headline": "Brands celebrate India’s historic win in the T20 World Cup",
+      "article_url": "https://www.socialmediadissect.com/brands-celebrate-indias-historic-win-in-the-t20-world-cup/",
+      "source_name": "Social Media Dissect",
+      "published_date": "2024-07-01T11:41:33+00:00",
+      "fetched_at": "2026-10-28 16:02:05"
+    },
+    {
+      "headline": "Instagram tests long-form videos of up to 90 minutes in US",
+      "article_url": "https://www.socialsamosa.com/news-2/instagram-tests-long-form-videos-90-minutes-us-12756673",
+      "source_name": "Social Samosa",
+      "published_date": "2026-10-27T11:56:22.865+05:30",
+      "fetched_at": "2026-10-28 16:02:04"
+    },
+    {
+      "headline": "Pinterest expands programmatic ad buying across North & South America and APAC",
+      "article_url": "https://www.socialsamosa.com/news-2/pinterest-programmatic-ad-buying-north-south-america-apac-12756917",
+      "source_name": "Social Samosa",
+      "published_date": "2026-10-27T14:47:51.762+05:30",
+      "fetched_at": "2026-10-28 16:02:03"
+    },
+    {
+      "headline": "Meta Ads Manager adds breakdown tool to track individual creative performance",
+      "article_url": "https://www.socialsamosa.com/news-2/meta-ads-manager-breakdown-tool-track-individual-creative-performance-12760366",
+      "source_name": "Social Samosa",
+      "published_date": "2026-10-28T12:27:02.244+05:30",
+      "fetched_at": "2026-10-28 16:02:02"
+    },
+    {
+      "headline": "YouTube introrduces Shorts series feature for serialised storytelling",
+      "article_url": "https://www.socialsamosa.com/news-2/youtube-shorts-series-feature-for-serialised-storytelling-12760212",
+      "source_name": "Social Samosa",
+      "published_date": "2026-10-28T12:27:13.489+05:30",
+      "fetched_at": "2026-10-28 16:02:02"
+    },
+    {
+      "headline": "Brands celebrate India's win against Pakistan with epic creatives",
+      "article_url": "https://www.socialmediadissect.com/brands-celebrate-indias-win-against-pakistan-with-epic-creatives/",
+      "source_name": "Social Media Dissect",
+      "published_date": "2024-06-10T11:59:19+00:00",
+      "fetched_at": "2026-10-28 16:02:01"
+    },
+    {
+      "headline": "India retains highest consumer confidence score at 64.3 despite October decline: Report",
+      "article_url": "https://www.socialsamosa.com/report/india-retains-highest-consumer-confidence-score-at-643-despite-october-decline-report-12761700",
+      "source_name": "Social Samosa",
+      "published_date": "2026-10-28T17:40:21.164+05:30",
+      "fetched_at": "2026-10-28 16:02:00"
+    },
+    {
+      "headline": "It gets worse with Leo Reich | shots",
+      "article_url": "https://shots.net/news/view/it-gets-worse-with-leo-reich",
+      "source_name": "Shots",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:02:00"
+    },
+    {
+      "headline": "Anuj Somani takes charge as Head of Integrated Marketing & Performance at Volvo Car India",
+      "article_url": "https://www.socialsamosa.com/industry-updates/anuj-somani-head-of-integrated-marketing-performance-volvo-car-india-12761750",
+      "source_name": "Social Samosa",
+      "published_date": "2026-10-28T17:48:34.429+05:30",
+      "fetched_at": "2026-10-28 16:01:59"
+    },
+    {
+      "headline": "E-commerce orders grow 10.4% ahead of Karva Chauth: Report",
+      "article_url": "https://www.socialsamosa.com/report/e-commerce-orders-grow-10-4-ahead-karva-chauth-12761946",
+      "source_name": "Social Samosa",
+      "published_date": "2026-10-28T18:26:41.242+05:30",
+      "fetched_at": "2026-10-28 16:01:58"
+    },
+    {
+      "headline": "Axis Max Life Insurance launches campaigns on ChatGPT Ads in India",
+      "article_url": "https://www.socialsamosa.com/industry-updates/axis-max-life-insurance-campaigns-chatgpt-ads-india-12761966",
+      "source_name": "Social Samosa",
+      "published_date": "2026-10-28T18:36:53.479+05:30",
+      "fetched_at": "2026-10-28 16:01:58"
+    },
+    {
+      "headline": "Wpromote x Giant Spoon​ elevate Ian Grody​ to Global CCO | shots",
+      "article_url": "https://shots.net/news/view/wpromote-x-giant-spoon-elevate-ian-grody-to-global-cco",
+      "source_name": "Shots",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:57"
+    },
+    {
+      "headline": "Brands celebrate Team India's T20 Victory Parade at Marine Drive",
+      "article_url": "https://www.socialmediadissect.com/brands-celebrate-team-indias-t20-victory-parade-at-marine-drive/",
+      "source_name": "Social Media Dissect",
+      "published_date": "2024-07-05T11:39:23+00:00",
+      "fetched_at": "2026-10-28 16:01:56"
+    },
+    {
+      "headline": "India’s gaming market reaches $1.04 billion in 2025, grows 14.8%: Report",
+      "article_url": "https://www.socialsamosa.com/report/india-gaming-market-reaches-1-04-billion-2025-grows-14-8-12761986",
+      "source_name": "Social Samosa",
+      "published_date": "2026-10-28T18:49:56.557+05:30",
+      "fetched_at": "2026-10-28 16:01:56"
+    },
+    {
+      "headline": "​Yacht Club welcomes Megan Gamez and Shanghoon | shots",
+      "article_url": "https://shots.net/news/view/yacht-club-welcomes-megan-gamez-and-shanghoon",
+      "source_name": "Shots",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:56"
+    },
+    {
+      "headline": "The psychology behind AI’s cuteness cult",
+      "article_url": "https://www.thedrum.com/opinion/sian-conway-wood-the-psychology-behind-ai-s-cuteness-offensive",
+      "source_name": "The Drum",
+      "published_date": "2026-10-28T12:16:52+00:00",
+      "fetched_at": "2026-10-28 16:01:55"
+    },
+    {
+      "headline": "Case study: How Glam21 integrated itself into Navratri celebrations through a mobile beauty van",
+      "article_url": "https://www.socialsamosa.com/indian-social-media-case-studies/case-study-glam21-navratri-celebrations-mobile-beauty-van-12742385",
+      "source_name": "Social Samosa",
+      "published_date": "2026-10-26T09:00:37.630+05:30",
+      "fetched_at": "2026-10-28 16:01:55"
+    },
+    {
+      "headline": "Zed Black’s festive season drives 40% of sales: Anshul Agrawal on the marketing playbook",
+      "article_url": "https://www.socialsamosa.com/marketing-shorts/zed-black-festive-season-drives-40-percent-sales-anshul-agrawal-marketing-playbook-12716941",
+      "source_name": "Social Samosa",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:54"
+    },
+    {
+      "headline": "MARKETING ERRS TO LEARN FROM BRANDS: SONY AND THE CASE OF RACIST PSP AD",
+      "article_url": "https://www.socialmediadissect.com/marketing-errs-to-learn-from-brands-sony-and-the-case-of-racist-psp-ad/",
+      "source_name": "Social Media Dissect",
+      "published_date": "2021-06-04T07:15:56+00:00",
+      "fetched_at": "2026-10-28 16:01:54"
+    },
+    {
+      "headline": "Festive TV spot costs up to Rs. 4 lakh for 10 seconds amid fragmented attention",
+      "article_url": "https://www.socialsamosa.com/experts-speak/festive-tv-spot-costs-4-lakh-10-seconds-amid-fragmented-attention-12682122",
+      "source_name": "Social Samosa",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:54"
+    },
+    {
+      "headline": "Greatergood signs Lachlan Dickie | shots",
+      "article_url": "https://shots.net/news/view/greatergood-signs-lachlan-dickie",
+      "source_name": "Shots",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:53"
+    },
+    {
+      "headline": "The creator bouquet: How influencers are rewriting the Diwali playbook",
+      "article_url": "https://www.socialsamosa.com/guest-post/influencers-rewriting-diwali-playbook-12753718",
+      "source_name": "Social Samosa",
+      "published_date": "2026-10-27T08:00:37.339+05:30",
+      "fetched_at": "2026-10-28 16:01:52"
+    },
+    {
+      "headline": "Reverie Content​ welcomes Femke Huurdeman | shots",
+      "article_url": "https://shots.net/news/view/reverie-content-welcomes-femke-huurdeman",
+      "source_name": "Shots",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:51"
+    },
+    {
+      "headline": "Brands join the viral 'Nobody Will Remember' meme craze with creatives",
+      "article_url": "https://www.socialmediadissect.com/brands-join-the-viral-nobody-will-remember-meme-craze-with-clever-creatives/",
+      "source_name": "Social Media Dissect",
+      "published_date": "2024-08-23T13:34:21+00:00",
+      "fetched_at": "2026-10-28 16:01:50"
+    },
+    {
+      "headline": "Marketing Shorts",
+      "article_url": "https://www.socialsamosa.com/marketing-shorts",
+      "source_name": "Social Samosa",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:50"
+    },
+    {
+      "headline": "Kode signs Brody Salmon | shots",
+      "article_url": "https://shots.net/news/view/kode-signs-brody-salmon",
+      "source_name": "Shots",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:49"
+    },
+    {
+      "headline": "From GRWM to Qcom: How MARS Cosmetics is rethinking its festive marketing playbook",
+      "article_url": "https://www.socialsamosa.com/marketing-shorts/mars-cosmetics-rethinking-festive-marketing-playbook-12753977",
+      "source_name": "Social Samosa",
+      "published_date": "2026-10-27T08:00:37.394+05:30",
+      "fetched_at": "2026-10-28 16:01:49"
+    },
+    {
+      "headline": "Troy Browne heads to Hornet | shots",
+      "article_url": "https://shots.net/news/view/troy-browne-heads-to-hornet",
+      "source_name": "Shots",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:47"
+    },
+    {
+      "headline": "When every brand wants to celebrate: How agencies avoid festive advertising sameness",
+      "article_url": "https://www.socialsamosa.com/guest-post/agencies-avoid-festive-advertising-sameness-12757400",
+      "source_name": "Social Samosa",
+      "published_date": "2026-10-28T08:00:37.520+05:30",
+      "fetched_at": "2026-10-28 16:01:46"
+    },
+    {
+      "headline": "BRANDS THAT CHOSE COLLABORATION OVER COMPETITION",
+      "article_url": "https://www.socialmediadissect.com/brands-that-chose-collaboration-over-competition/",
+      "source_name": "Social Media Dissect",
+      "published_date": "2021-05-17T08:51:56+00:00",
+      "fetched_at": "2026-10-28 16:01:46"
+    },
+    {
+      "headline": "How Research Arts rewired its workflow | shots",
+      "article_url": "https://shots.net/news/view/how-research-arts-rewired-its-workflow",
+      "source_name": "Shots",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:45"
+    },
+    {
+      "headline": "PharmEasy’s Gaurav Verma on using festive moments to build year-round healthcare relevance",
+      "article_url": "https://www.socialsamosa.com/interviews/pharmeasys-gaurav-verma-on-festive-moments-building-healthcare-relevance-12758095",
+      "source_name": "Social Samosa",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:45"
+    },
+    {
+      "headline": "Festive search has a visibility problem, a cost problem and an attribution problem",
+      "article_url": "https://www.socialsamosa.com/experts-speak/festive-search-visibility-problem-cost-problem-attribution-problem-12753872",
+      "source_name": "Social Samosa",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:43"
+    },
+    {
+      "headline": "How Pablo took on Motor Neurone Disease | shots",
+      "article_url": "https://shots.net/news/view/how-pablo-took-on-motor-neurone-disease",
+      "source_name": "Shots",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:43"
+    },
+    {
+      "headline": "ADVERTISERS CONTINUE TO BANK ON TV!",
+      "article_url": "https://www.socialmediadissect.com/advertisers-continue-to-bank-on-tv/",
+      "source_name": "Social Media Dissect",
+      "published_date": "2021-05-13T03:50:05+00:00",
+      "fetched_at": "2026-10-28 16:01:43"
+    },
+    {
+      "headline": "Brand Saga",
+      "article_url": "https://www.socialsamosa.com/brand-saga",
+      "source_name": "Social Samosa",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:42"
+    },
+    {
+      "headline": "How Melchior Leroux composed a dance between the lines | shots",
+      "article_url": "https://shots.net/news/view/how-melchior-leroux-composed-a-dance-between-the-lines",
+      "source_name": "Shots",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:41"
+    },
+    {
+      "headline": "Campaign Confessions",
+      "article_url": "https://www.socialsamosa.com/campaign-confessions",
+      "source_name": "Social Samosa",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:40"
+    },
+    {
+      "headline": "Topical Spot | Social Samosa",
+      "article_url": "https://www.socialsamosa.com/campaign-reviews",
+      "source_name": "Social Samosa",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:38"
+    },
+    {
+      "headline": "How Oura made a big impact with a miniature set | shots",
+      "article_url": "https://shots.net/news/view/how-oura-made-a-big-impact-with-a-miniature-set",
+      "source_name": "Shots",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:38"
+    },
+    {
+      "headline": "Brand building and performance marketing must integrate to drive stronger business outcomes: Vibhor Gulati, Defodio Digital",
+      "article_url": "https://www.medianews4u.com/brand-building-and-performance-marketing-must-integrate-to-drive-stronger-business-outcomes-vibhor-gulati-defodio-digital/",
+      "source_name": "Medianews4u",
+      "published_date": "2026-09-10T10:19:47+05:30",
+      "fetched_at": "2026-10-28 16:01:37"
+    },
+    {
+      "headline": "Campaign Face Off | Social Samosa",
+      "article_url": "https://www.socialsamosa.com/campaign-face-off",
+      "source_name": "Social Samosa",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:36"
+    },
+    {
+      "headline": "Firefox takes a trip down meme-ory lane | shots",
+      "article_url": "https://shots.net/news/view/firefox-takes-a-trip-down-meme-ory-lane",
+      "source_name": "Shots",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:36"
+    },
+    {
+      "headline": "Campaign Feature | Social Samosa",
+      "article_url": "https://www.socialsamosa.com/campaign-feature",
+      "source_name": "Social Samosa",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:35"
+    },
+    {
+      "headline": "Brand Dissect - Eternz",
+      "article_url": "https://www.socialmediadissect.com/brand-dissect-eternz/",
+      "source_name": "Social Media Dissect",
+      "published_date": "2026-01-28T14:14:21+00:00",
+      "fetched_at": "2026-10-28 16:01:35"
+    },
+    {
+      "headline": "Campaign Spot | Social Samosa",
+      "article_url": "https://www.socialsamosa.com/campaign-spot",
+      "source_name": "Social Samosa",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:34"
+    },
+    {
+      "headline": "Andrea Arnold and DC3's youth club lexicon | shots",
+      "article_url": "https://shots.net/news/view/andrea-arnold-and-dc3s-youth-club-lexicon",
+      "source_name": "Shots",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:34"
+    },
+    {
+      "headline": "Brands bring festive traditions to life through creative campaigns: Ganesh Chaturthi 2026",
+      "article_url": "https://www.medianews4u.com/brands-bring-festive-traditions-to-life-through-creative-campaigns-ganesh-chaturthi-2026/",
+      "source_name": "Medianews4u",
+      "published_date": "2026-09-15T11:54:14+05:30",
+      "fetched_at": "2026-10-28 16:01:32"
+    },
+    {
+      "headline": "Ffern reaches for the moon | shots",
+      "article_url": "https://shots.net/news/view/ffern-reaches-for-the-moon",
+      "source_name": "Shots",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:31"
+    },
+    {
+      "headline": "Dubai Vibes Daily rebrands as Dubai Vibes to strengthen its city-focused content identity",
+      "article_url": "https://www.marketingmoves.in/brands/dubai-vibes-daily-rebrands-as-dubai-vibes-to-strengthen-its-city-focused-content-identity",
+      "source_name": "Marketing Moves",
+      "published_date": "2026-03-05T21:47:09+00:00",
+      "fetched_at": "2026-10-28 16:01:31"
+    },
+    {
+      "headline": "Adjusted fees extend One Show 2026 Currency Value Adjustment support to India",
+      "article_url": "https://www.marketingmoves.in/events/adjusted-fees-extend-one-show-2026-currency-value-adjustment-support-to-india",
+      "source_name": "Marketing Moves",
+      "published_date": "2025-11-24T06:22:04+00:00",
+      "fetched_at": "2026-10-28 16:01:30"
+    },
+    {
+      "headline": "Brands that balance Performance & Equity Ads see 90% higher ROI: WARC",
+      "article_url": "https://www.medianews4u.com/brands-that-balance-performance-equity-ads-see-90-higher-roi-warc/",
+      "source_name": "Medianews4u",
+      "published_date": "2025-01-29T11:26:11+05:30",
+      "fetched_at": "2026-10-28 16:01:30"
+    },
+    {
+      "headline": "NSE backs Mumbai Climate Week Innovation Challenge for scalable climate solutions",
+      "article_url": "https://www.marketingmoves.in/events/nse-backs-mumbai-climate-week-innovation-challenge-for-scalable-climate-solutions",
+      "source_name": "Marketing Moves",
+      "published_date": "2025-11-24T05:40:46+00:00",
+      "fetched_at": "2026-10-28 16:01:29"
+    },
+    {
+      "headline": "Brand Dissect - FITPASS",
+      "article_url": "https://www.socialmediadissect.com/brand-dissect-fitpass/",
+      "source_name": "Social Media Dissect",
+      "published_date": "2026-02-17T12:05:28+00:00",
+      "fetched_at": "2026-10-28 16:01:29"
+    },
+    {
+      "headline": "Tanks, Traitors and tractors with James Blunt | shots",
+      "article_url": "https://shots.net/news/view/tanks-traitors-and-tractors-with-james-blunt",
+      "source_name": "Shots",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:29"
+    },
+    {
+      "headline": "District by Zomato brings Hamleys Wonderland Christmas Carnival to Jio World Garden",
+      "article_url": "https://www.marketingmoves.in/events/district-by-zomato-brings-hamleys-wonderland-christmas-carnival-to-jio-world-garden",
+      "source_name": "Marketing Moves",
+      "published_date": "2025-11-24T05:43:11+00:00",
+      "fetched_at": "2026-10-28 16:01:28"
+    },
+    {
+      "headline": "Brands aren’t built in factories or boardrooms but in the hearts of consumers, says Piyush Pandey",
+      "article_url": "https://www.medianews4u.com/brands-arent-built-in-factories-or-boardrooms-but-in-the-hearts-of-consumers-says-piyush-pandey/",
+      "source_name": "Medianews4u",
+      "published_date": "2025-01-31T01:22:20+05:30",
+      "fetched_at": "2026-10-28 16:01:28"
+    },
+    {
+      "headline": "Oath.vote shows that the pencil is mightier than the bullet | shots",
+      "article_url": "https://shots.net/news/view/oathvote-shows-that-the-pencil-is-mightier-than-the-bullet",
+      "source_name": "Shots",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:27"
+    },
+    {
+      "headline": "Aval Awards 2025 returns with Aval Vikatan tribute to 17 iconic women",
+      "article_url": "https://www.marketingmoves.in/events/aval-awards-2025-returns-with-aval-vikatan-tribute-to-17-iconic-women",
+      "source_name": "Marketing Moves",
+      "published_date": "2025-11-24T05:04:37+00:00",
+      "fetched_at": "2026-10-28 16:01:26"
+    },
+    {
+      "headline": "The Vibe gathering showcases IAA India Snapchat AR storytelling possibilities",
+      "article_url": "https://www.marketingmoves.in/events/the-vibe-gathering-showcases-iaa-india-snapchat-ar-storytelling-possibilities",
+      "source_name": "Marketing Moves",
+      "published_date": "2025-11-25T05:01:37+00:00",
+      "fetched_at": "2026-10-28 16:01:25"
+    },
+    {
+      "headline": "Marketing agencies must embrace performance-based fees to demonstrate real value: Sameer Joshi and Anindya Ghosh, Sam & And",
+      "article_url": "https://www.medianews4u.com/marketing-agencies-must-embrace-performance-based-fees-to-demonstrate-real-value-sameer-joshi-and-anindya-ghosh-sam-andy/",
+      "source_name": "Medianews4u",
+      "published_date": "2025-02-05T10:05:22+05:30",
+      "fetched_at": "2026-10-28 16:01:25"
+    },
+    {
+      "headline": "Eyes wide weird | shots",
+      "article_url": "https://shots.net/news/view/eyes-wide-weird",
+      "source_name": "Shots",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:25"
+    },
+    {
+      "headline": "(Old) We want to know you better. | Marketing Monk",
+      "article_url": "https://www.marketingmonk.so/forms/9265f019-9c44-47a5-939c-ffb15b41023e",
+      "source_name": "Marketing Monk",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:24"
+    },
+    {
+      "headline": "New lifestyle brands highlight Adani Ahmedabad Marathon partners announcement",
+      "article_url": "https://www.marketingmoves.in/events/new-lifestyle-brands-highlight-adani-ahmedabad-marathon-partners-announcement",
+      "source_name": "Marketing Moves",
+      "published_date": "2025-11-25T04:48:54+00:00",
+      "fetched_at": "2026-10-28 16:01:24"
+    },
+    {
+      "headline": "Silent film framing captures Haldirams Har Pal campaign around first meeting jitters",
+      "article_url": "https://www.marketingmoves.in/campaign-coverage/silent-film-framing-captures-haldirams-har-pal-campaign-around-first-meeting-jitters",
+      "source_name": "Marketing Moves",
+      "published_date": "2025-11-25T04:52:43+00:00",
+      "fetched_at": "2026-10-28 16:01:23"
+    },
+    {
+      "headline": "Brands will continue to need agencies, but increasingly for work beyond traditional agency functions: Rajiv Dingra, ReBid",
+      "article_url": "https://www.medianews4u.com/brands-will-continue-to-need-agencies-but-increasingly-for-work-beyond-traditional-agency-functions-rajiv-dingra-rebid/",
+      "source_name": "Medianews4u",
+      "published_date": "2026-09-25T10:40:02+05:30",
+      "fetched_at": "2026-10-28 16:01:23"
+    },
+    {
+      "headline": "KFC serves up a side of understanding | shots",
+      "article_url": "https://shots.net/news/view/kfc-serves-up-a-side-of-understanding",
+      "source_name": "Shots",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:23"
+    },
+    {
+      "headline": "Brand packed story builds Family Man Shaadi.com placement into dating debate",
+      "article_url": "https://www.marketingmoves.in/campaign-coverage/brand-packed-story-builds-family-man-shaadi-com-placement-into-dating-debate",
+      "source_name": "Marketing Moves",
+      "published_date": "2025-11-25T03:47:15+00:00",
+      "fetched_at": "2026-10-28 16:01:22"
+    },
+    {
+      "headline": "Hey, We Miss You. ❤️",
+      "article_url": "https://www.marketingmonk.so/p/hey-miss",
+      "source_name": "Marketing Monk",
+      "published_date": "2023-12-04T09:00:14.263Z",
+      "fetched_at": "2026-10-28 16:01:21"
+    },
+    {
+      "headline": "Bangalore queues underline power of Big Singh Feast campaign",
+      "article_url": "https://www.marketingmoves.in/campaign-coverage/bangalore-queues-underline-power-of-big-singh-feast-campaign",
+      "source_name": "Marketing Moves",
+      "published_date": "2025-11-25T07:02:20+00:00",
+      "fetched_at": "2026-10-28 16:01:21"
+    },
+    {
+      "headline": "Advertisers are re-discovering value in the print medium, particularly its strength in delivering localised, high-trust ad exper",
+      "article_url": "https://www.medianews4u.com/advertisers-are-re-discovering-value-in-the-print-medium-particularly-its-strength-in-delivering-localised-high-trust-ad-experiences-madison-report-2025/",
+      "source_name": "Medianews4u",
+      "published_date": "2025-02-14T17:25:55+05:30",
+      "fetched_at": "2026-10-28 16:01:20"
+    },
+    {
+      "headline": "On My Radar: Shannon Griffin | shots",
+      "article_url": "https://shots.net/news/view/on-my-radar-shannon-griffin",
+      "source_name": "Shots",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:20"
+    },
+    {
+      "headline": "Warm family story drives MyFitness shift with Bas Taste Hi Kiya Tha campaign",
+      "article_url": "https://www.marketingmoves.in/campaign-coverage/warm-family-story-drives-myfitness-shift-with-bas-taste-hi-kiya-tha-campaign",
+      "source_name": "Marketing Moves",
+      "published_date": "2025-11-26T06:20:48+00:00",
+      "fetched_at": "2026-10-28 16:01:20"
+    },
+    {
+      "headline": "Family Man season three drives multi platform launch push across apps matches and prime time",
+      "article_url": "https://www.marketingmoves.in/campaign-coverage/family-man-season-three-drives-multi-platform-launch-push-across-apps-matches-and-prime-time",
+      "source_name": "Marketing Moves",
+      "published_date": "2025-11-26T05:05:20+00:00",
+      "fetched_at": "2026-10-28 16:01:19"
+    },
+    {
+      "headline": "MasterChow and Ranveer Brar champion home cooked Asian flavours in new campaign",
+      "article_url": "https://www.marketingmoves.in/campaign-coverage/masterchow-and-ranveer-brar-champion-home-cooked-asian-flavours-in-new-campaign",
+      "source_name": "Marketing Moves",
+      "published_date": "2025-11-26T03:54:36+00:00",
+      "fetched_at": "2026-10-28 16:01:18"
+    },
+    {
+      "headline": "The shots Podcast: Top 5 Scariest Ads | shots",
+      "article_url": "https://shots.net/news/view/the-shots-podcast-top-5-scariest-ads",
+      "source_name": "Shots",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:18"
+    },
+    {
+      "headline": "Kips Learning appoints Biju Thomas as COO to strengthen STEM innovation and educator engagement",
+      "article_url": "https://www.marketingmoves.in/people/kips-learning-appoints-biju-thomas-as-coo-to-strengthen-stem-innovation-and-educator-engagement",
+      "source_name": "Marketing Moves",
+      "published_date": "2025-11-13T04:00:32+00:00",
+      "fetched_at": "2026-10-28 16:01:17"
+    },
+    {
+      "headline": "Advertising Club Trivandrum makes its mark with official launch",
+      "article_url": "https://www.medianews4u.com/advertising-club-trivandrum-makes-its-mark-with-official-launch/",
+      "source_name": "Medianews4u",
+      "published_date": "2025-02-17T13:07:48+05:30",
+      "fetched_at": "2026-10-28 16:01:17"
+    },
+    {
+      "headline": "Cybersecurity Content Marketing Playbook for 2026",
+      "article_url": "https://www.marketingmonk.so/p/cybersecurity-content-marketing",
+      "source_name": "Marketing Monk",
+      "published_date": "2026-09-03T16:52:11.313Z",
+      "fetched_at": "2026-10-28 16:01:16"
+    },
+    {
+      "headline": "Fitch/Baker conjure up another scare | shots",
+      "article_url": "https://shots.net/news/view/fitchbaker-conjure-up-another-scare",
+      "source_name": "Shots",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:16"
+    },
+    {
+      "headline": "Mondelēz partners with Lotus Bakeries to launch and locally manufacture Biscoff in India",
+      "article_url": "https://www.marketingmoves.in/marketing/mondelez-partners-with-lotus-bakeries-to-launch-and-locally-manufacture-biscoff-in-india",
+      "source_name": "Marketing Moves",
+      "published_date": "2025-11-14T04:59:30+00:00",
+      "fetched_at": "2026-10-28 16:01:15"
+    },
+    {
+      "headline": "Review Management Software: A Practical Guide for Marketers",
+      "article_url": "https://www.marketingmonk.so/p/review-management-software",
+      "source_name": "Marketing Monk",
+      "published_date": "2026-09-05T10:53:06.137Z",
+      "fetched_at": "2026-10-28 16:01:15"
+    },
+    {
+      "headline": "Dove The Family Man campaign turns Srikant Tiwari into the Dove Man",
+      "article_url": "https://www.marketingmoves.in/campaign-coverage/dove-the-family-man-campaign-turns-srikant-tiwari-into-the-dove-man",
+      "source_name": "Marketing Moves",
+      "published_date": "2025-11-18T05:07:38+00:00",
+      "fetched_at": "2026-10-28 16:01:14"
+    },
+    {
+      "headline": "SuperYou aims to become a Rs 1000 crore brand in three years",
+      "article_url": "https://www.marketingmoves.in/startups/superyou-aims-to-become-a-rs-1000-crore-brand-in-three-years",
+      "source_name": "Marketing Moves",
+      "published_date": "2025-11-18T05:52:29+00:00",
+      "fetched_at": "2026-10-28 16:01:14"
+    },
+    {
+      "headline": "We want to know you better. 🥹 | Marketing Monk",
+      "article_url": "https://www.marketingmonk.so/forms/a1b6b52e-2d0f-4cdd-960f-0577886e9ddb",
+      "source_name": "Marketing Monk",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:13"
+    },
+    {
+      "headline": "Snitch Mens Day campaign Just Say It turns silent nods into spoken praise",
+      "article_url": "https://www.marketingmoves.in/campaign-coverage/snitch-mens-day-campaign-just-say-it-turns-silent-nods-into-spoken-praise",
+      "source_name": "Marketing Moves",
+      "published_date": "2025-11-19T06:41:52+00:00",
+      "fetched_at": "2026-10-28 16:01:13"
+    },
+    {
+      "headline": "You can't design a place that you need to Google | shots",
+      "article_url": "https://shots.net/news/view/you-cant-design-a-place-that-you-need-to-google",
+      "source_name": "Shots",
+      "published_date": null,
+      "fetched_at": "2026-10-28 16:01:12"
+    },
+    {
+      "headline": "Why WhatsApp launched Channels?",
+      "article_url": "https://www.marketingmonk.so/p/whatsapp-launched-channels",
+      "source_name": "Marketing Monk",
+      "published_date": "2023-09-23T04:30:00.000Z",
+      "fetched_at": "2026-10-28 16:01:11"
+    },
+    {
+      "headline": "Looking back at classic Dharmendra brand associations in Indian advertising",
+      "article_url": "https://www.marketingmoves.in/case-studies/looking-back-at-classic-dharmendra-brand-associations-in-indian-advertising",
+      "source_name": "Marketing Moves",
+      "published_date": "2025-11-25T07:35:44+00:00",
+      "fetched_at": "2026-10-28 16:01:11"
+    }
+  ],
+  "privacy": "This report contains public source URLs and headlines, not article bodies, crawl checkpoints, credentials or operational databases."
+}

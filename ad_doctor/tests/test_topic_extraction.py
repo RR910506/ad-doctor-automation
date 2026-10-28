@@ -1,6 +1,7 @@
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from contextlib import closing
 from pathlib import Path
 
@@ -12,9 +13,34 @@ from src.db import get_connection, initialize_database, list_topics, upsert_arti
 from src.topic_extractor import canonical_topic_title, clean_headline, extract_topics, is_valid_exact_topic
 from src.topic_matcher import is_same_news_event, normalize_topic_text, topic_similarity
 from src.topic_lock_engine import TopicLockSummary
+from src.demo_runner import run_demo_pipeline
 
 
 class TopicExtractionTest(unittest.TestCase):
+    def test_demo_pipeline_creates_pending_drafts_without_network(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            database_path = Path(temporary_directory) / "demo.db"
+            with mock.patch("requests.sessions.Session.request", side_effect=AssertionError("Demo must run offline")):
+                summary = run_demo_pipeline(database_path=database_path)
+            self.assertEqual(summary.demo_articles_inserted, 6)
+            self.assertEqual(summary.topics_locked, 1)
+            self.assertEqual(summary.blog_drafts_created, 1)
+            self.assertEqual(summary.social_drafts_created, 1)
+            with closing(get_connection(database_path)) as connection:
+                drafts = connection.execute("SELECT approval_status FROM content_outputs").fetchall()
+            self.assertEqual([row["approval_status"] for row in drafts], ["pending", "pending"])
+
+    def test_demo_validation_requires_explicit_opt_in(self) -> None:
+        article = {
+            "article_url": "https://example.com/demo/nike-ai-olympics",
+            "source_url": "https://example.com",
+            "fetch_run_id": "demo_test",
+        }
+        topic = "Nike launches AI-powered Olympic campaign"
+        self.assertFalse(is_valid_exact_topic(topic, article))
+        self.assertTrue(is_valid_exact_topic(topic, article, include_demo_articles=True))
+        self.assertFalse(is_valid_exact_topic("Homepage", article, include_demo_articles=True))
+
     def test_clean_headline_removes_publication_suffix(self) -> None:
         self.assertEqual(
             clean_headline("Nike launches AI-powered campaign for Olympics | Ad Age"),

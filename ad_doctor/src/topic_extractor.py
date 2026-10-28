@@ -63,7 +63,7 @@ def extract_topics(
             if not raw_exact_topic:
                 skipped_articles += 1
                 continue
-            if not is_valid_exact_topic(raw_exact_topic, article):
+            if not is_valid_exact_topic(raw_exact_topic, article, include_demo_articles=include_demo_articles):
                 skipped_articles += 1
                 continue
 
@@ -164,7 +164,12 @@ def canonical_topic_title(topic: str) -> str | None:
     return None
 
 
-def is_valid_exact_topic(topic: str, article: dict[str, object] | None = None) -> bool:
+def is_valid_exact_topic(
+    topic: str,
+    article: dict[str, object] | None = None,
+    *,
+    include_demo_articles: bool = False,
+) -> bool:
     if is_generic_headline(topic):
         return False
     lowered = topic.lower()
@@ -201,7 +206,7 @@ def is_valid_exact_topic(topic: str, article: dict[str, object] | None = None) -
     if not has_signal:
         return False
     if article:
-        if is_demo_article(article):
+        if is_demo_article(article) and not include_demo_articles:
             return False
         article_url = str(article.get("article_url") or "")
         source_url = str(article.get("source_url") or "")

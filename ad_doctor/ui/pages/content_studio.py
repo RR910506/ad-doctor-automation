@@ -11,10 +11,10 @@ def _bullets(st, title, values):
 
 
 def render(st, service, actions):
-    page_header(st, "Content Studio", "Review research, diagnosis, carousel, quality and history in one editorial workspace.")
+    page_header(st, "My content", "Read your draft, review its sources, and decide what happens next.")
     vm = service.get("content_studio")
     if not vm:
-        empty_state(st, "No editorial content available", "No qualified topic has stored research or content yet.", "Complete the legacy research and content stages first.")
+        empty_state(st, "Your drafts will appear here", "There is no prepared content to review yet.", "Your expert can check sources and research progress in Expert workspace.")
         return
     left, main = st.columns([0.8, 2.2])
     labels = [item.title for item in vm.queue]
@@ -27,64 +27,65 @@ def render(st, service, actions):
     score_col, source_col = main.columns(2)
     score_col.metric("Quality score", f"{data['quality']}/100" if data["quality"] is not None else "Not generated")
     source_col.metric("Distinct publications", data["sources"])
-    tabs = main.tabs(["Overview", "Research", "Diagnosis", "Carousel", "Article", "Quality", "History"])
+    article_tab, carousel_tab, expert_tab = main.tabs(["Article", "Carousel", "Expert details"])
+    tabs = [expert_tab, expert_tab, expert_tab, carousel_tab, article_tab, expert_tab, expert_tab]
     with tabs[0]:
-        main.write(f"**Evidence coverage:** {data['sources']} distinct approved publications")
-        main.info("Publishing remains blocked until quality gates pass and a human explicitly approves the package.")
+        st.write(f"**Evidence coverage:** {data['sources']} distinct approved publications")
+        st.info("Publishing remains blocked until quality gates pass and a human explicitly approves the package.")
     with tabs[1]:
         for label, key in (("Verified facts", "facts"), ("Source claims", "claims"), ("Contradictions", "contradictions"), ("Unknowns", "unknowns")):
-            _bullets(main, label, data[key])
-        main.markdown("#### Source catalog")
+            _bullets(st, label, data[key])
+        st.markdown("#### Source catalog")
         if not data["source_catalog"]:
-            main.caption("No structured source catalog is stored for this legacy draft.")
+            st.caption("No structured source catalog is stored for this legacy draft.")
         for source in data["source_catalog"]:
-            with main.container(border=True):
-                main.write(f"**{source.get('publication', 'Approved publication')}** · {source.get('article', 'Stored source')}")
-                main.caption(f"Evidence use: {source.get('used_for', 'Research support')}")
+            with st.container(border=True):
+                st.write(f"**{source.get('publication', 'Approved publication')}** · {source.get('article', 'Stored source')}")
+                st.caption(f"Evidence use: {source.get('used_for', 'Research support')}")
     with tabs[2]:
         for label, value in data["diagnosis"].items():
-            main.markdown(f"#### {label}")
-            main.write(value)
+            st.markdown(f"#### {label}")
+            st.write(value)
     with tabs[3]:
         if not data["slides"]:
-            main.caption("No carousel output is stored for this editorial item.")
+            st.caption("No carousel output is stored for this editorial item.")
         for slide in data["slides"]:
-            with main.container(border=True):
-                main.caption(f"SLIDE {slide['number']} · {str(slide['type']).upper()}")
-                main.markdown(f"### {slide['headline']}")
-                main.write(slide["body"])
-                main.write(f"**Visual direction:** {slide['visual_direction']}")
-                main.caption(f"Source support: {slide['source_support']} · Sources: {', '.join(slide['sources']) or 'Opinion / analysis'}")
+            with st.container(border=True):
+                st.caption(f"SLIDE {slide['number']} · {str(slide['type']).upper()}")
+                st.markdown(f"### {slide['headline']}")
+                st.write(slide["body"])
+                st.write(f"**Visual direction:** {slide['visual_direction']}")
+                st.caption(f"Source support: {slide['source_support']} · Sources: {', '.join(slide['sources']) or 'Opinion / analysis'}")
                 for warning in slide["quality_warnings"]:
-                    main.warning(warning)
+                    st.warning(warning)
     with tabs[4]:
-        main.markdown("#### Long-form article preview")
-        main.write(data["article"])
-        main.caption("Display preview only. Stored research remains the source boundary.")
+        st.markdown("#### Long-form article preview")
+        st.write(data["article"])
+        st.caption("Display preview only. Stored research remains the source boundary.")
     with tabs[5]:
         quality = data["quality_detail"]
-        gate_col, score_col = main.columns(2)
+        gate_col, score_col = st.columns(2)
         gate_col.metric("Gate status", quality["gate"])
         score_col.metric("Overall score", f"{data['quality']}/100" if data["quality"] is not None else "Not generated")
-        main.markdown("#### Dimension scores")
+        st.markdown("#### Dimension scores")
         if quality["dimensions"]:
-            dimension_cols = main.columns(len(quality["dimensions"]))
+            dimension_cols = st.columns(len(quality["dimensions"]))
             for col, (label, score) in zip(dimension_cols, quality["dimensions"].items()):
                 col.metric(label, f"{score}/100")
         else:
-            main.caption("No automated dimension scores are stored for this draft.")
-        _bullets(main, "Blockers", quality["blockers"])
-        _bullets(main, "Warnings", quality["warnings"])
-        main.markdown("#### Traceability")
-        main.info(quality["traceability"])
+            st.caption("No automated dimension scores are stored for this draft.")
+        _bullets(st, "Blockers", quality["blockers"])
+        _bullets(st, "Warnings", quality["warnings"])
+        st.markdown("#### Traceability")
+        st.info(quality["traceability"])
     with tabs[6]:
-        _bullets(main, "Package versions", data["versions"])
-        _bullets(main, "Quality-review versions", data["quality_versions"])
-        main.markdown("#### Workflow history")
+        _bullets(st, "Package versions", data["versions"])
+        _bullets(st, "Quality-review versions", data["quality_versions"])
+        st.markdown("#### Workflow history")
         for event in data["timeline"]:
-            main.write(f"**{event['time']} · {event['label']}**")
-            main.caption(event["detail"])
-        _bullets(main, "Approval history", data["approval_history"])
+            st.write(f"**{event['time']} · {event['label']}**")
+            st.caption(event["detail"])
+        _bullets(st, "Approval history", data["approval_history"])
     main.divider()
     output_id = data.get("approval_content_output_id")
     reviewer = main.text_input("Reviewer identity", placeholder="Name or work email", key=f"reviewer_{output_id}")
