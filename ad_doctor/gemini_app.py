@@ -5,8 +5,10 @@ import time
 import streamlit as st
 from src.services.gemini_workspace import GeminiWorkspace
 from ui.pages.gemini_workspace import render
+from ui.theme import apply_theme
 
 st.set_page_config(page_title='Ad Doctor · Gemini', page_icon='🩺', layout='wide')
+apply_theme(st)
 
 
 def configured(name):
@@ -48,4 +50,12 @@ key = configured('GEMINI_API_KEY')
 if not key:
     st.info('Add GEMINI_API_KEY in Streamlit Secrets, then reboot the app.')
     st.stop()
+with st.sidebar:
+    st.markdown('<div class="ad-kicker">THE AD DOCTOR</div><h2>Content Intelligence</h2>', unsafe_allow_html=True)
+    st.caption('Today')
+    st.caption('My content')
+    with st.expander('Expert workspace'):
+        st.caption('AI models, evidence and collection reports appear in the main workspace when needed.')
+    st.divider()
+    st.caption('Marketing examined. Strategy diagnosed.')
 render(st, GeminiWorkspace(api_key=key))
