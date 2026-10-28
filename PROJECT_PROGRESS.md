@@ -57,6 +57,14 @@ Setup and requirements: [AD_DOCTOR_SETUP.md](AD_DOCTOR_SETUP.md),
 Free service quotas and publisher access determine operational limits. Complete
 publisher coverage and exact-time free hosting cannot be promised.
 
+Release code is uploaded to `streamlit-community-demo` and merged into `main`
+through [PR #1](https://github.com/RR910506/ad-doctor-automation/pull/1).
+The default branch now includes the scheduler workflow; secret binding and
+activation remain pending. The existing Streamlit URL redirected this
+environment to Streamlit account authentication, so its rebuilt private UI
+could not be verified here. Local browser checks passed; hosted acceptance
+requires the owner's signed-in session.
+
 ## Historical milestone log
 
 ## Collection connection — 26 October 2026
